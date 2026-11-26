@@ -57,9 +57,12 @@ A local Bumble virtual-controller test connected, discovered service 0x2446, and
 
 The running receiver requests a zero-microsecond CPU idle latency limit
 and holds the Bluetooth UART clock on. A live sample on the Paperwhite 4
-entered only its shallow WFI state. The kernel also exposes a 50 μs WAIT
-state. Testing that latency limit while keeping the receiver available is
-a possible way to reduce idle power.
+entered only its shallow WFI state. In a short trial with a 50 μs latency
+limit, the Kindle spent 8.8 of 10 seconds in the deeper WAIT state. BLE
+discovery, a GATT read, and a Home Assistant image upload worked at this
+setting. The test used USB power, so it measured idle residency without
+measuring battery-life improvement. The shipped receiver still defaults
+to 0 μs.
 
 In a 35-second suspend-to-idle test, the receiver's BLE advertisements were
 initially visible. A client attempted a GATT connection, the read timed
