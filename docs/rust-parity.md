@@ -7,8 +7,9 @@ OpenDisplay acknowledgments. The transport sends the frame finish
 acknowledgment before refreshing the panel and sends the completion status
 afterward.
 
-Hardware parity still requires BLE GATT registration and advertising,
-Broadcom UART initialization and cleanup, framebuffer refresh, battery
-advertising, and authenticated Kindle telemetry and controls. Verify those
+The Paperwhite 4 hardware module ports the existing guarded Broadcom UART
+sequence and framebuffer refresh. Both paths still need device testing.
+The receiver also needs BLE GATT registration, battery advertising, and
+authenticated Kindle telemetry and controls. Verify those
 features through Home Assistant on a Paperwhite 4 before switching the
 device launcher to Rust.

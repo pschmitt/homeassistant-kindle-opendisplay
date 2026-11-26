@@ -1,6 +1,8 @@
 //! OpenDisplay framing for the Kindle Paperwhite 4.
 
 use flate2::{Decompress, FlushDecompress, Status};
+#[cfg(target_os = "linux")]
+pub mod paperwhite;
 
 pub const WIDTH: u16 = 1072;
 pub const HEIGHT: u16 = 1448;
