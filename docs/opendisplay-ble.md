@@ -6,13 +6,17 @@ The Inkwell Paperwhite 4 can use its internal Broadcom BCM4343A1 as an OpenDispl
 
 Install [Inkwell for Paperwhite 4](https://github.com/akaped/Inkwell) first.
 From a checkout of this repository, copy the `opendisplay/` directory to the
-Kindle. Run the following command as root inside Inkwell from the copied
+Kindle. Run [`install.py`](../opendisplay/install.py) as root inside Inkwell from the copied
 directory. The Kindle needs network access to PyPI and its Alpine package
 repositories.
 
 ```sh
 python3 install.py
 ```
+
+Pass `--cpu-latency-us 50` to opt in to the tested deeper idle setting.
+Omitting the flag preserves an existing setting during upgrades.
+[See the power and suspend notes](#suspend-and-battery-use).
 
 The installer stages the Python dependencies in `/opt/opendisplay`, creates
 a BLE address and control key if needed, and registers the receiver for

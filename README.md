@@ -14,9 +14,16 @@
 ## Install
 
 Install the Paperwhite 4 port of [Inkwell](https://github.com/akaped/Inkwell).
-Run the [Kindle post-installer](docs/opendisplay-ble.md#install-on-the-kindle),
-then follow the [Home Assistant integration guide](docs/kindle-inkwell.md)
-to configure the display and controls.
+Copy the repository's `opendisplay/` directory to the Kindle. Run the
+[post-installer](opendisplay/install.py) as root from that directory:
+
+```sh
+python3 install.py --cpu-latency-us 50
+```
+
+Omit the option to keep the existing idle setting. See the
+[Kindle setup guide](docs/opendisplay-ble.md#install-on-the-kindle), then
+configure the [Home Assistant integration](docs/kindle-inkwell.md).
 
 ## Documentation
 

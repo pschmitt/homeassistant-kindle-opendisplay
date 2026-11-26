@@ -73,3 +73,10 @@ media image and upload options as `opendisplay.upload_image`. Select the
 OpenDisplay device on the same Bluetooth address as the Kindle Inkwell
 entry. This action holds the Kindle's BLE lock while calling OpenDisplay,
 so status polls and control commands wait for the image transfer.
+
+## TODO
+
+- Add an opt-in Home Assistant action to run an arbitrary command on the
+  Kindle over authenticated BLE. Return stdout, stderr, and the exit code
+  in the action response. Define execution time and output size limits
+  before enabling it.
