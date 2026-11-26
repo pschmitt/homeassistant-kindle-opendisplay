@@ -38,3 +38,12 @@ and SSH preferences persist through the normal Inkwell boot.
 
 Control requests use one-time challenges and a shared key. Telemetry is
 authenticated and encrypted. Keep the key out of source control.
+
+## Display a Home Assistant dashboard
+
+Use the `kindle_inkwell.send_dashboard` action in an automation and select
+the Kindle's OpenDisplay device. Supply one to three rooms with temperature
+and CO₂ entities, an outdoor temperature entity, a weather entity, and an
+AIS Vessel Tracker last-passing-vessel entity. The dashboard shows the
+current weather condition and uses the AIS integration's cached photo when
+one is available. OpenDisplay sends the image over BLE.
