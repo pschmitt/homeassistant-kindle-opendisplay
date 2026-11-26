@@ -1,23 +1,32 @@
 """Authenticated Kindle controls alongside the OpenDisplay GATT service."""
 
 import asyncio
+import base64
 import hmac
 import json
 import logging
 import os
+import pwd
 import secrets
+import signal
 import time
+from contextlib import suppress
 from pathlib import Path
 
 from bumble.att import ATT_INSUFFICIENT_AUTHORIZATION_ERROR, ATT_Error
 from bumble.core import UUID
 from bumble.gatt import Characteristic, CharacteristicValue, Service
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 ROOT = Path("/mnt/us/linux")
 UUIDS = [UUID(f"884cc76{index}-ea3a-4b7b-a8bd-114c4e5342ae") for index in range(4)]
 CONTEXT = b"kindle-control-v1\0"
 LOG = logging.getLogger(__name__)
+COMMAND_ENABLED = Path("/opt/opendisplay/allow-ble-command")
+COMMAND_OPCODE = 0x89
+MAX_COMMAND = 160
+MAX_STREAM = 128
 
 
 async def command(*args, action=""):
@@ -124,6 +133,52 @@ async def reboot(stock):
         LOG.exception("Kindle reboot failed")
 
 
+async def _read_output(stream, buffer):
+    while chunk := await stream.read(4096):
+        buffer.extend(chunk[: MAX_STREAM + 1 - len(buffer)])
+
+
+async def run_shell(command_text):
+    """Run a short command without receiver privileges."""
+    account = pwd.getpwnam("nobody")
+    process = await asyncio.create_subprocess_exec(
+        "/bin/sh",
+        "-c",
+        command_text,
+        user=account.pw_uid,
+        group=account.pw_gid,
+        extra_groups=[],
+        cwd="/tmp",
+        env={"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "HOME": "/tmp"},
+        stdin=asyncio.subprocess.DEVNULL,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        start_new_session=True,
+    )
+    stdout, stderr = bytearray(), bytearray()
+    timed_out = False
+    try:
+        async with asyncio.timeout(5):
+            await asyncio.gather(
+                process.wait(),
+                _read_output(process.stdout, stdout),
+                _read_output(process.stderr, stderr),
+            )
+    except TimeoutError:
+        timed_out = True
+    finally:
+        with suppress(ProcessLookupError):
+            os.killpg(process.pid, signal.SIGKILL)
+        await process.wait()
+    return {
+        "stdout": base64.b64encode(stdout[:MAX_STREAM]).decode("ascii"),
+        "stderr": base64.b64encode(stderr[:MAX_STREAM]).decode("ascii"),
+        "exit_code": None if timed_out else process.returncode,
+        "timed_out": timed_out,
+        "truncated": len(stdout) > MAX_STREAM or len(stderr) > MAX_STREAM,
+    }
+
+
 def add_kindle_service(device, key):
     """Install the optional shared-key service on a Bumble peripheral."""
     if len(key) != 32:
@@ -132,6 +187,10 @@ def add_kindle_service(device, key):
     responses = {}
     pending_reboot = None
     cipher = AESGCM(hmac.digest(key, b"kindle-control response encryption", "sha256"))
+    command_cipher = AESGCM(
+        hmac.digest(key, b"kindle-control command request encryption", "sha256")
+    )
+    command_lock = asyncio.Lock()
 
     def challenge(connection):
         nonce = secrets.token_bytes(16)
@@ -142,10 +201,41 @@ def add_kindle_service(device, key):
     async def request(connection, packet):
         nonlocal pending_reboot
         current = challenges.pop(connection, None)
-        if current is None or len(packet) != 17:
+        if current is None or len(packet) < 17:
             raise ATT_Error(ATT_INSUFFICIENT_AUTHORIZATION_ERROR)
         nonce, expires = current
         header = CONTEXT + nonce + packet[:1]
+        if packet[0] == COMMAND_OPCODE:
+            if time.monotonic() > expires or not 18 <= len(packet) <= MAX_COMMAND + 17:
+                raise ATT_Error(ATT_INSUFFICIENT_AUTHORIZATION_ERROR)
+            try:
+                command_text = command_cipher.decrypt(
+                    nonce[:12], packet[1:], header
+                ).decode()
+            except (InvalidTag, UnicodeDecodeError) as err:
+                raise ATT_Error(ATT_INSUFFICIENT_AUTHORIZATION_ERROR) from err
+            if not COMMAND_ENABLED.is_file():
+                result = {"error": "disabled"}
+            elif not command_text.strip() or "\0" in command_text:
+                result = {"error": "invalid"}
+            elif command_lock.locked():
+                result = {"error": "busy"}
+            else:
+                async with command_lock:
+                    try:
+                        result = await run_shell(command_text)
+                    except (OSError, KeyError):
+                        LOG.error("The Kindle BLE command could not be started")
+                        result = {"error": "start_failed"}
+            if connection in device.connections.values():
+                responses[connection] = cipher.encrypt(
+                    nonce[:12],
+                    json.dumps(result, separators=(",", ":")).encode(),
+                    header,
+                )
+            return
+        if len(packet) != 17:
+            raise ATT_Error(ATT_INSUFFICIENT_AUTHORIZATION_ERROR)
         expected = hmac.digest(key, b"request\0" + header, "sha256")[:16]
         if time.monotonic() > expires or not hmac.compare_digest(expected, packet[1:]):
             raise ATT_Error(ATT_INSUFFICIENT_AUTHORIZATION_ERROR)

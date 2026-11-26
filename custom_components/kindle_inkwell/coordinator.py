@@ -11,6 +11,7 @@ from homeassistant.components.bluetooth import (
 )
 from homeassistant.const import CONF_HOST
 from homeassistant.core import callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import CONNECTION_BLUETOOTH, DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -35,6 +36,25 @@ def parse_battery_announcement(data):
             return None
         charging = bool(data[4])
     return data[2], charging
+
+
+def client_for_device(hass, device_id):
+    """Find the BLE client for a Kindle or its linked OpenDisplay device."""
+    device = dr.async_get(hass).async_get(device_id)
+    if not device:
+        return None
+    addresses = {
+        address.upper()
+        for connection, address in device.connections
+        if connection == dr.CONNECTION_BLUETOOTH
+    }
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        address = entry.data.get(CONF_BLUETOOTH_ADDRESS)
+        if address and address.upper() in addresses:
+            coordinator = getattr(entry, "runtime_data", None)
+            if coordinator and coordinator.ble and coordinator.client:
+                return coordinator.client
+    return None
 
 
 class KindleCoordinator(DataUpdateCoordinator[KindleState]):

@@ -1,6 +1,7 @@
 """Client for the Kindle's restricted SSH command."""
 
 import asyncio
+import base64
 import hmac
 import json
 from dataclasses import dataclass
@@ -188,7 +189,15 @@ class KindleBleClient:
         async with self.lock:
             await self._exchange(8 if stock else 7)
 
-    async def _exchange(self, opcode, *, extended=False):
+    async def execute(self, command):
+        """Run an opt-in command without automatic retries."""
+        payload = command.encode()
+        if not 1 <= len(payload) <= 160 or not command.strip() or "\0" in command:
+            raise KindleError("Command must be 1 to 160 UTF-8 bytes")
+        async with self.lock:
+            return await self._exchange(9, command=payload)
+
+    async def _exchange(self, opcode, *, extended=False, command=None):
         from bleak.exc import BleakError
         from bleak_retry_connector import (
             BleakClientWithServiceCache,
@@ -227,9 +236,21 @@ class KindleBleClient:
                         raise KindleError("Invalid Kindle challenge")
                     operation = bytes((opcode | (0xC0 if extended else 0x80),))
                     header = b"kindle-control-v1\0" + nonce + operation
-                    proof = hmac.digest(self.key, b"request\0" + header, "sha256")[:16]
+                    if command is None:
+                        payload = hmac.digest(
+                            self.key, b"request\0" + header, "sha256"
+                        )[:16]
+                    else:
+                        request_cipher = AESGCM(
+                            hmac.digest(
+                                self.key,
+                                b"kindle-control command request encryption",
+                                "sha256",
+                            )
+                        )
+                        payload = request_cipher.encrypt(nonce[:12], command, header)
                     await client.write_gatt_char(
-                        _REQUEST, operation + proof, response=True
+                        _REQUEST, operation + payload, response=True
                     )
                     raw = await client.read_gatt_char(_RESPONSE)
                 finally:
@@ -246,12 +267,22 @@ class KindleBleClient:
             raise KindleError("Kindle BLE response authentication failed") from err
         try:
             fields = json.loads(data)
+            if command is not None:
+                if fields.get("error") == "disabled":
+                    raise KindleError("BLE command execution is disabled on the Kindle")
+                if "error" in fields:
+                    raise KindleError("The Kindle rejected the BLE command")
+                for stream in ("stdout", "stderr"):
+                    fields[stream] = base64.b64decode(
+                        fields[stream], validate=True
+                    ).decode("utf-8", errors="replace")
+                return fields
             if fields is None and extended and opcode == 0:
                 raise KindleTelemetryUnsupported("Extended telemetry is unavailable")
             if not isinstance(fields, list) or len(fields) != (16 if extended else 15):
                 raise ValueError
             return KindleState(*fields)
-        except (ValueError, TypeError) as err:
+        except (ValueError, TypeError, KeyError, AttributeError) as err:
             raise KindleError(
                 "Kindle reported a failed command or invalid telemetry"
             ) from err

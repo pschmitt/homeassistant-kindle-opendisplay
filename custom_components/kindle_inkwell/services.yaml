@@ -14,3 +14,14 @@ upload_image:
     dither_mode:
       selector:
         text:
+execute_command:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: kindle_inkwell
+    command:
+      required: true
+      selector:
+        text:

@@ -74,9 +74,29 @@ OpenDisplay device on the same Bluetooth address as the Kindle Inkwell
 entry. This action holds the Kindle's BLE lock while calling OpenDisplay,
 so status polls and control commands wait for the image transfer.
 
-## TODO
+## Execute a command over BLE
 
-- Add an opt-in Home Assistant action to run an arbitrary command on the
-  Kindle over authenticated BLE. Return stdout, stderr, and the exit code
-  in the action response. Define execution time and output size limits
-  before enabling it.
+To enable the action on your Kindle, create the opt-in marker as root:
+
+```sh
+touch /opt/opendisplay/allow-ble-command
+```
+
+The receiver checks the marker for each request. Remove it to turn
+execution off. Commands run as `nobody` inside Inkwell. The BLE command
+and result are encrypted with the existing shared key.
+
+Call `kindle_inkwell.execute_command` as a Home Assistant administrator:
+
+```yaml
+action: kindle_inkwell.execute_command
+data:
+  device_id: YOUR_KINDLE_DEVICE_ID
+  command: uname -r
+response_variable: kindle_result
+```
+
+The response contains `stdout`, `stderr`, `exit_code`, `timed_out`, and
+`truncated`. Commands accept up to 160 UTF-8 bytes and run for up to five
+seconds. The response keeps up to 128 bytes per output stream. A timeout
+sets `exit_code` to null. The integration sends each command once.

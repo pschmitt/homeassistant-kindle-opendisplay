@@ -101,6 +101,20 @@
           "description": "The dithering mode passed to OpenDisplay."
         }
       }
+    },
+    "execute_command": {
+      "name": "Execute Kindle command",
+      "description": "Run a command over authenticated BLE and return its output.",
+      "fields": {
+        "device_id": {
+          "name": "Kindle device",
+          "description": "The Kindle that will run the command."
+        },
+        "command": {
+          "name": "Command",
+          "description": "A shell command up to 160 UTF-8 bytes."
+        }
+      }
     }
   }
 }
