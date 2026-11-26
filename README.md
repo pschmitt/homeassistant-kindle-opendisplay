@@ -25,6 +25,11 @@ Omit the option to keep the existing idle setting. See the
 [Kindle setup guide](docs/opendisplay-ble.md#install-on-the-kindle), then
 configure the [Home Assistant integration](docs/kindle-inkwell.md).
 
+## Development
+
+Run `nix develop` for the Python, Rust, and linting tools on Linux.
+The [roadmap](docs/roadmap.md) tracks the Rust port and Kindle image builds.
+
 ## Documentation
 
 | Topic | Description |
@@ -32,6 +37,7 @@ configure the [Home Assistant integration](docs/kindle-inkwell.md).
 | [OpenDisplay BLE](docs/opendisplay-ble.md) | Kindle post-install, panel refresh, and Bluetooth hardware findings. |
 | [Home Assistant integration](docs/kindle-inkwell.md) | Marketplace link, pairing, BLE controls, and image uploads. |
 | [Tested device](docs/tested-device.md) | Hardware, firmware, and verification on the Paperwhite 4. |
+| [Roadmap](docs/roadmap.md) | Rust, Crane, Circus, and prebuilt Inkwell images. |
 
 ## License
 
