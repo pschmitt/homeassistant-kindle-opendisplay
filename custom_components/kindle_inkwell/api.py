@@ -170,14 +170,23 @@ class KindleBleClient:
             if device is None:
                 raise KindleError("No active Bluetooth connection path to the Kindle")
             try:
-                async with asyncio.timeout(35):
-                    client = await establish_connection(
-                        BleakClientWithServiceCache,
-                        device,
-                        "Kindle Inkwell",
-                        max_attempts=1,
-                        use_services_cache=False,
-                    )
+                async with asyncio.timeout(50):
+                    for attempt in range(2):
+                        client = await establish_connection(
+                            BleakClientWithServiceCache,
+                            device,
+                            "Kindle Inkwell",
+                            max_attempts=1,
+                            use_services_cache=attempt == 0,
+                        )
+                        if client.services.get_characteristic(_CHALLENGE) is not None:
+                            break
+                        try:
+                            if attempt == 1:
+                                raise KindleError("Kindle control service is missing")
+                            await client.clear_cache()
+                        finally:
+                            await client.disconnect()
                     try:
                         nonce = await client.read_gatt_char(_CHALLENGE)
                         if len(nonce) != 16:
