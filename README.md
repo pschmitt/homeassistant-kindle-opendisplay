@@ -7,7 +7,7 @@
 ## Features
 
 - **OpenDisplay BLE** sends images to the e-ink panel from Home Assistant.
-- **BTHome** broadcasts battery percentage and charging for passive monitoring.
+- **BTHome** feeds passive battery and charging readings into Kindle Inkwell.
 - **Kindle Inkwell** adds frontlight, Wi-Fi and SSH controls, battery and
   device diagnostics, and buttons for rebooting into Inkwell or Kindle OS.
 

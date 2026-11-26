@@ -4,7 +4,13 @@ import logging
 from datetime import timedelta
 from pathlib import Path
 
+from homeassistant.components.bluetooth import (
+    BluetoothScanningMode,
+    async_register_callback,
+    async_track_unavailable,
+)
 from homeassistant.const import CONF_HOST
+from homeassistant.core import callback
 from homeassistant.helpers.device_registry import CONNECTION_BLUETOOTH, DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -15,6 +21,20 @@ from .const import (
     CONF_SSH_CONFIG,
     DOMAIN,
 )
+
+BTHOME_UUID = "0000fcd2-0000-1000-8000-00805f9b34fb"
+
+
+def parse_battery_announcement(data):
+    """Decode the unencrypted BTHome fields emitted by this receiver."""
+    if len(data) not in (3, 5) or data[:2] != b"\x40\x01" or data[2] > 100:
+        return None
+    charging = None
+    if len(data) == 5:
+        if data[3] != 0x16 or data[4] not in (0, 1):
+            return None
+        charging = bool(data[4])
+    return data[2], charging
 
 
 class KindleCoordinator(DataUpdateCoordinator[KindleState]):
@@ -32,7 +52,8 @@ class KindleCoordinator(DataUpdateCoordinator[KindleState]):
         )
         self.ble = CONF_BLUETOOTH_KEY_FILE in entry.data
         self.client = None
-        address = entry.data[CONF_BLUETOOTH_ADDRESS]
+        self.battery_announcement = None
+        self.address = address = entry.data[CONF_BLUETOOTH_ADDRESS]
         self.device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.unique_id or entry.entry_id)},
             connections={(CONNECTION_BLUETOOTH, address)} if address else set(),
@@ -41,6 +62,42 @@ class KindleCoordinator(DataUpdateCoordinator[KindleState]):
             model=entry.data["model"],
             sw_version=entry.data["firmware"],
         )
+
+    @callback
+    def async_listen_for_battery(self, entry):
+        """Listen for this Kindle's passive battery readings."""
+        if self.ble and self.address:
+            entry.async_on_unload(
+                async_register_callback(
+                    self.hass,
+                    self._async_battery_advertisement,
+                    {"address": self.address},
+                    BluetoothScanningMode.PASSIVE,
+                )
+            )
+            entry.async_on_unload(
+                async_track_unavailable(
+                    self.hass,
+                    self._async_battery_unavailable,
+                    self.address,
+                    connectable=False,
+                )
+            )
+
+    @callback
+    def _async_battery_advertisement(self, info, _change):
+        announcement = parse_battery_announcement(
+            info.service_data.get(BTHOME_UUID, b"")
+        )
+        if announcement != self.battery_announcement:
+            self.battery_announcement = announcement
+            self.async_update_listeners()
+
+    @callback
+    def _async_battery_unavailable(self, _info):
+        if self.battery_announcement is not None:
+            self.battery_announcement = None
+            self.async_update_listeners()
 
     async def _async_init_client(self):
         data = self.config_entry.data

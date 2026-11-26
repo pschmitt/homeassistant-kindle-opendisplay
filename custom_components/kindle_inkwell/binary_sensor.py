@@ -19,7 +19,19 @@ class KindleCharging(KindleEntity, BinarySensorEntity):
     _attr_device_class = BinarySensorDeviceClass.BATTERY_CHARGING
 
     @property
+    def _announced_charging(self):
+        if announcement := self.coordinator.battery_announcement:
+            return announcement[1]
+
+    @property
+    def available(self):
+        """Stay available when the Kindle broadcasts but GATT is busy."""
+        return self._announced_charging is not None or super().available
+
+    @property
     def is_on(self):
-        """Return the driver charging state."""
+        """Prefer the passively announced charging state."""
+        if (charging := self._announced_charging) is not None:
+            return charging
         if state := self.coordinator.data:
             return state.charging

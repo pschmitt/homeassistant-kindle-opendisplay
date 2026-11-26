@@ -34,15 +34,33 @@ class KindleBattery(KindleEntity, SensorEntity):
     _attr_native_unit_of_measurement = PERCENTAGE
 
     @property
+    def available(self):
+        """Stay available when the Kindle broadcasts but GATT is busy."""
+        return self.coordinator.battery_announcement is not None or super().available
+
+    @property
     def native_value(self):
-        """Return the measured capacity."""
+        """Prefer the passively announced capacity."""
+        if announcement := self.coordinator.battery_announcement:
+            return announcement[0]
         if state := self.coordinator.data:
             return state.battery
 
     @property
     def extra_state_attributes(self):
         """Expose the driver charging status."""
-        if state := self.coordinator.data:
+        state = self.coordinator.data
+        if announcement := self.coordinator.battery_announcement:
+            charging = announcement[1]
+            attributes = {"source": "bthome"}
+            if charging is not None:
+                attributes["charging"] = charging
+            elif state is not None:
+                attributes["charging"] = state.charging
+            if state is not None and state.charging == attributes.get("charging"):
+                attributes["status"] = state.battery_status
+            return attributes
+        if state is not None:
             return {"charging": state.charging, "status": state.battery_status}
 
 

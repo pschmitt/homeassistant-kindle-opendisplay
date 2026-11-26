@@ -40,13 +40,16 @@ authenticated and encrypted. Keep the key out of source control.
 
 ## Passive battery monitoring
 
-Add the discovered Kindle under Home Assistant's built-in **BTHome**
-integration to receive battery percentage and charging status from BLE
-advertisements. This needs no bindkey and works with a passive Bluetooth
-scanner. The two readings are visible to nearby BLE receivers. The Kindle
-Inkwell integration retains its existing battery entities and uses the
-authenticated connection for controls and detailed status, including SSID
-and BSSID.
+Kindle Inkwell listens to the receiver's BTHome advertisements automatically.
+The existing **Battery** and **Charging** entities use the announced readings
+when available. Older receivers still provide readings through the
+authenticated connection. The two advertised values are visible to nearby
+BLE scanners. SSID, BSSID, and control commands use the authenticated
+connection.
+
+The standalone Home Assistant BTHome entry is optional and creates an
+additional device record. If you previously added it, remove that entry
+and ignore its rediscovery to keep a single pair of battery entities.
 
 ## Reboot
 
