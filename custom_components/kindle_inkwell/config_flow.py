@@ -1,62 +1,76 @@
-"""Set up a Kindle with a restricted SSH connection."""
+"""Set up authenticated Bluetooth control of a Kindle."""
 
 import re
-from pathlib import PurePosixPath
+from pathlib import Path
 
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.const import CONF_HOST
 
-from .api import KindleClient, KindleError
-from .const import CONF_BLUETOOTH_ADDRESS, CONF_SSH_CONFIG, DOMAIN
-
-SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_HOST): str,
-        vol.Required(CONF_SSH_CONFIG, default="/config/.ssh/opendisplay_config"): str,
-        vol.Optional(CONF_BLUETOOTH_ADDRESS): str,
-    }
-)
+from .api import KindleBleClient, KindleError, read_key
+from .const import CONF_BLUETOOTH_ADDRESS, CONF_BLUETOOTH_KEY_FILE, DOMAIN
 
 
 class KindleConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Validate the device before creating an entry."""
+    """Validate a Kindle before creating or updating an entry."""
 
     VERSION = 1
 
     async def async_step_user(self, user_input=None):
-        """Configure a Kindle."""
+        """Set up a Kindle over Bluetooth."""
+        return await self._async_configure("user", user_input)
+
+    async def async_step_reconfigure(self, user_input=None):
+        """Move an existing entry to Bluetooth without replacing its entities."""
+        return await self._async_configure(
+            "reconfigure", user_input, self._get_reconfigure_entry()
+        )
+
+    async def _async_configure(self, step, user_input, entry=None):
+        defaults = entry.data if entry else {}
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_BLUETOOTH_ADDRESS): str,
+                vol.Required(
+                    CONF_BLUETOOTH_KEY_FILE, default="/config/.ssh/kindle_ble.key"
+                ): str,
+            }
+        )
         errors = {}
         if user_input is not None:
-            host = user_input[CONF_HOST].strip()
-            ssh_config = user_input[CONF_SSH_CONFIG].strip()
-            address = user_input.get(CONF_BLUETOOTH_ADDRESS, "").strip().upper()
-            if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]*", host):
-                errors[CONF_HOST] = "invalid_host"
-            if not PurePosixPath(ssh_config).is_absolute():
-                errors[CONF_SSH_CONFIG] = "invalid_path"
-            if address and not re.fullmatch(r"(?:[0-9A-F]{2}:){5}[0-9A-F]{2}", address):
+            address = user_input[CONF_BLUETOOTH_ADDRESS].strip().upper()
+            path = Path(user_input[CONF_BLUETOOTH_KEY_FILE].strip())
+            if (
+                not re.fullmatch(r"(?:[0-9A-F]{2}:){5}[0-9A-F]{2}", address)
+                or entry is not None
+                and defaults.get(CONF_BLUETOOTH_ADDRESS) not in ("", None, address)
+            ):
                 errors[CONF_BLUETOOTH_ADDRESS] = "invalid_address"
-            if not errors:
-                await self.async_set_unique_id(address or host.lower())
-                self._abort_if_unique_id_configured()
+            else:
                 try:
-                    state = await KindleClient(ssh_config, host).read()
-                except KindleError:
-                    errors["base"] = "cannot_connect"
+                    key = await self.hass.async_add_executor_job(read_key, path)
+                except (OSError, ValueError):
+                    errors[CONF_BLUETOOTH_KEY_FILE] = "invalid_key"
                 else:
-                    return self.async_create_entry(
-                        title=state.model,
-                        data={
-                            CONF_HOST: host,
-                            CONF_SSH_CONFIG: ssh_config,
+                    try:
+                        state = await KindleBleClient(self.hass, address, key).read()
+                    except KindleError:
+                        errors["base"] = "cannot_connect"
+                    else:
+                        data = {
                             CONF_BLUETOOTH_ADDRESS: address,
+                            CONF_BLUETOOTH_KEY_FILE: str(path),
                             "model": state.model,
                             "firmware": state.firmware,
-                        },
-                    )
+                        }
+                        if entry is not None:
+                            return self.async_update_reload_and_abort(entry, data=data)
+                        await self.async_set_unique_id(address)
+                        self._abort_if_unique_id_configured()
+                        return self.async_create_entry(title=state.model, data=data)
         return self.async_show_form(
-            step_id="user",
-            data_schema=self.add_suggested_values_to_schema(SCHEMA, user_input),
+            step_id=step,
+            data_schema=self.add_suggested_values_to_schema(
+                schema, user_input or defaults
+            ),
             errors=errors,
         )

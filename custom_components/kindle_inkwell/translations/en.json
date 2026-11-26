@@ -2,43 +2,68 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect to a Kindle running Inkwell",
+        "title": "Connect to a Kindle over Bluetooth",
         "data": {
-          "host": "SSH host alias",
-          "ssh_config": "SSH configuration file",
-          "bluetooth_address": "OpenDisplay Bluetooth address (optional)"
+          "bluetooth_address": "OpenDisplay Bluetooth address",
+          "bluetooth_key_file": "BLE key file"
         },
         "data_description": {
-          "host": "An alias in the SSH configuration with a restricted key and a pinned host key.",
-          "ssh_config": "Absolute path inside the Home Assistant Core container.",
-          "bluetooth_address": "Enter the address shown on the OpenDisplay device to link the Kindle Inkwell and OpenDisplay devices."
+          "bluetooth_key_file": "Absolute path inside Home Assistant Core to the shared key file."
+        }
+      },
+      "reconfigure": {
+        "title": "Connect to a Kindle over Bluetooth",
+        "data": {
+          "bluetooth_address": "OpenDisplay Bluetooth address",
+          "bluetooth_key_file": "BLE key file"
+        },
+        "data_description": {
+          "bluetooth_key_file": "Absolute path inside Home Assistant Core to the shared key file."
         }
       }
     },
     "error": {
-      "cannot_connect": "The Kindle did not return the expected telemetry over SSH.",
-      "invalid_host": "Enter a valid SSH host alias or address.",
-      "invalid_path": "Enter an absolute path to the SSH configuration file.",
-      "invalid_address": "Enter a Bluetooth address in XX:XX:XX:XX:XX:XX form."
+      "invalid_address": "Enter the Kindle's Bluetooth address in XX:XX:XX:XX:XX:XX form.",
+      "invalid_key": "Could not read a 32-byte hexadecimal key from that file.",
+      "cannot_connect": "Could not authenticate to the Kindle over Bluetooth."
     },
     "abort": {
-      "already_configured": "This Kindle is already configured."
+      "already_configured": "This Kindle is already configured.",
+      "reconfigure_successful": "The Kindle now uses Bluetooth."
     }
   },
   "entity": {
     "binary_sensor": {
-      "charging": {"name": "Battery charging"}
+      "charging": {
+        "name": "Battery charging"
+      }
     },
     "sensor": {
-      "battery": {"name": "Battery"},
-      "wifi": {"name": "Wi-Fi"},
-      "signal": {"name": "Wi-Fi signal"}
+      "battery": {
+        "name": "Battery"
+      },
+      "wifi": {
+        "name": "Wi-Fi"
+      },
+      "signal": {
+        "name": "Wi-Fi signal"
+      }
     },
     "switch": {
-      "frontlight": {"name": "Frontlight"}
+      "frontlight": {
+        "name": "Frontlight"
+      },
+      "wifi_enabled": {
+        "name": "Wi-Fi radio"
+      },
+      "ssh_enabled": {
+        "name": "Wi-Fi SSH"
+      }
     }
   },
   "exceptions": {
-    "frontlight_failed": {"message": "The Kindle did not change the frontlight."}
+    "control_failed": {
+      "message": "The Kindle did not apply the requested change."
+    }
   }
 }

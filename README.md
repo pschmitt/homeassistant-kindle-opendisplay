@@ -7,7 +7,7 @@
 ## Features
 
 - **OpenDisplay BLE:** send images to the e-ink panel from Home Assistant.
-- **Kindle Inkwell integration:** frontlight, battery, charging, Wi-Fi and firmware.
+- **Kindle Inkwell integration:** frontlight, battery, Wi-Fi and SSH controls over BLE.
 - **Full-screen display:** a clock, home measurements and the latest vessel.
 - **Vessel photo:** the AIS integration's photo, with photographer credit.
 - **Bridge:** a small authenticated HTTP server reads Home Assistant states.

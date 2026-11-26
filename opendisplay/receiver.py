@@ -253,7 +253,7 @@ class Receiver:
                 path.unlink(missing_ok=True)
 
 
-async def serve(transport, device_config, output, render=None):
+async def serve(transport, device_config, output, render=None, control_key=None):
     from bumble.core import UUID
     from bumble.device import Device
     from bumble.gatt import Characteristic, CharacteristicValue, Service
@@ -291,6 +291,10 @@ async def serve(transport, device_config, output, render=None):
             CharacteristicValue(read=lambda _connection: b"", write=write),
         )
         device.add_services([Service(uuid, [characteristic])])
+        if control_key is not None:
+            from kindle_gatt import add_kindle_service
+
+            add_kindle_service(device, control_key)
         device.advertising_data = ADVERTISEMENT_PREFIX + manufacturer_data()
         device.scan_response_data = bytes((len(name) + 1, 0x09)) + name
         await device.power_on()
@@ -323,7 +327,16 @@ if __name__ == "__main__":
         action="store_true",
         help="Refresh the PW4 panel after receiving a frame",
     )
+    parser.add_argument(
+        "--control-key-file", type=Path, help="File containing a 32-byte hex BLE key"
+    )
     args = parser.parse_args()
+    key_file = args.control_key_file or Path(__file__).with_name("control.key")
+    control_key = (
+        bytes.fromhex(key_file.read_text())
+        if args.control_key_file or key_file.exists()
+        else None
+    )
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
     )
@@ -338,6 +351,7 @@ if __name__ == "__main__":
                     args.device_config,
                     args.output,
                     render_pw4 if args.render else None,
+                    control_key,
                 )
             )
     except KeyboardInterrupt:

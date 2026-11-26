@@ -1,13 +1,37 @@
 {
   "entity": {
-    "binary_sensor": {"charging": {"default": "mdi:battery-charging"}},
+    "binary_sensor": {
+      "charging": {
+        "default": "mdi:battery-charging"
+      }
+    },
     "sensor": {
-      "battery": {"default": "mdi:battery"},
-      "wifi": {"default": "mdi:wifi"},
-      "signal": {"default": "mdi:wifi-strength-2"}
+      "battery": {
+        "default": "mdi:battery"
+      },
+      "wifi": {
+        "default": "mdi:wifi"
+      },
+      "signal": {
+        "default": "mdi:wifi-strength-2"
+      }
     },
     "switch": {
-      "frontlight": {"default": "mdi:lightbulb-outline", "state": {"on": "mdi:lightbulb-on"}}
+      "frontlight": {
+        "default": "mdi:lightbulb-outline",
+        "state": {
+          "on": "mdi:lightbulb-on"
+        }
+      },
+      "wifi_enabled": {
+        "default": "mdi:wifi",
+        "state": {
+          "off": "mdi:wifi-off"
+        }
+      },
+      "ssh_enabled": {
+        "default": "mdi:ssh"
+      }
     }
   }
 }

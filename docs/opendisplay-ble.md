@@ -50,8 +50,8 @@ On the configured Kindle, the Inkwell init hook starts the receiver after the us
 
 `sensor.odkindle_temperature` is the Kindle's internal i.MX SoC temperature. The receiver refreshes the advertisement every 30 seconds when the encoded reading changes. It measures the chip, so it will be warmer than the room.
 
-The [Kindle Inkwell integration](kindle-inkwell.md) provides a frontlight switch and battery and Wi-Fi sensors. Install `opendisplay/frontlight` as `/opt/opendisplay/frontlight` on the Kindle, and give Home Assistant a dedicated SSH key with that forced command and forwarding and PTY disabled. Pin the Kindle host key. The endpoint accepts `on`, `off`, `status`, `battery`, and `info` only. Turning the frontlight on restores its last nonzero brightness. The battery command reports the kernel's actual capacity percentage and charging state.
-
-The Wi-Fi sensor includes the association state, RSSI, device type, Kindle firmware and build, kernel release, and Alpine version. It is read-only. Home Assistant cannot turn Wi-Fi back on over an SSH connection that depends on it. A BLE Wi-Fi control would need a separate authenticated GATT service and a Home Assistant client for that service.
+The [Kindle Inkwell integration](kindle-inkwell.md) uses a separate authenticated
+BLE service on the same receiver. It provides the frontlight, Wi-Fi and Wi-Fi
+SSH switches, battery and charging sensors, and device diagnostics.
 
 A Home Assistant 2026.11.3 test completed the native image action through an ESPHome Bluetooth proxy. HA sent 5,054 compressed bytes, the Kindle reconstructed and saved the 194,032-byte frame, and the panel reported refresh complete.
