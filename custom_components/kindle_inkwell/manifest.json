@@ -1,4 +1,6 @@
 {
+  "domain": "kindle_inkwell",
+  "name": "Kindle Inkwell",
   "codeowners": [
     "@pschmitt"
   ],
@@ -7,10 +9,8 @@
     "bluetooth"
   ],
   "documentation": "https://github.com/pschmitt/homeassistant-kindle-opendisplay",
-  "domain": "kindle_inkwell",
   "integration_type": "device",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/pschmitt/homeassistant-kindle-opendisplay/issues",
-  "name": "Kindle Inkwell",
   "version": "0.2.0"
 }
