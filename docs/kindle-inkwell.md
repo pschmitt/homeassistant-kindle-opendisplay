@@ -44,8 +44,9 @@ Kindle Inkwell listens to the receiver's BTHome advertisements automatically.
 The existing **Battery** and **Charging** entities use the announced readings
 when available. Older receivers still provide readings through the
 authenticated connection. The two advertised values are visible to nearby
-BLE scanners. SSID, BSSID, and control commands use the authenticated
-connection.
+BLE scanners. SSID, BSSID, the current Wi-Fi IPv4 address, and control commands use the
+authenticated connection. The IP address is unknown while Wi-Fi is
+disconnected.
 
 The standalone Home Assistant BTHome entry is optional and creates an
 additional device record. If you previously added it, remove that entry

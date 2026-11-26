@@ -21,6 +21,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             KindleBattery(entry.runtime_data, "battery"),
             KindleNetwork(entry.runtime_data, "ssid"),
             KindleNetwork(entry.runtime_data, "bssid"),
+            KindleNetwork(entry.runtime_data, "ip_address"),
             KindleSignal(entry.runtime_data, "signal"),
         )
     )
@@ -76,7 +77,7 @@ class KindleNetwork(KindleEntity, SensorEntity):
 
     @property
     def native_value(self):
-        """Return the SSID or BSSID."""
+        """Return the reported network value."""
         if state := self.coordinator.data:
             return getattr(state, self.key)
 

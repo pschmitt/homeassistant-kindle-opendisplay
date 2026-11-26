@@ -17,6 +17,9 @@
       },
       "bssid": {
         "default": "mdi:access-point"
+      },
+      "ip_address": {
+        "default": "mdi:ip-network"
       }
     },
     "switch": {

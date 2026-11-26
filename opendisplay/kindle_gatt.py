@@ -69,6 +69,7 @@ async def telemetry():
         ssh == "on",
         device.get("ssid") if wifi_enabled else None,
         device.get("bssid") if wifi_enabled else None,
+        device.get("ip_address") if wifi_enabled else None,
     ]
 
 
@@ -148,8 +149,10 @@ def add_kindle_service(device, key):
         expected = hmac.digest(key, b"request\0" + header, "sha256")[:16]
         if time.monotonic() > expires or not hmac.compare_digest(expected, packet[1:]):
             raise ATT_Error(ATT_INSUFFICIENT_AUTHORIZATION_ERROR)
+        encrypted = bool(packet[0] & 0x80)
+        extended = encrypted and bool(packet[0] & 0x40)
         try:
-            opcode = packet[0] & 0x7F
+            opcode = packet[0] & (0x3F if extended else 0x7F)
             if opcode in (7, 8):
                 if not packet[0] & 0x80 or not (ROOT / "BOOT_OWN").is_file():
                     raise ValueError("Inkwell boot selection is unavailable")
@@ -162,10 +165,10 @@ def add_kindle_service(device, key):
         except (OSError, TimeoutError, ValueError, KeyError):
             LOG.exception("Kindle BLE control request failed")
             state = None
-        encrypted = bool(packet[0] & 0x80)
-        # Legacy clients never receive network identifiers in plaintext.
-        if state is not None and not encrypted:
-            state = state[:13]
+        # Older clients expect a fixed number of fields. Network identifiers
+        # are available only on encrypted responses.
+        if state is not None and not extended:
+            state = state[: 15 if encrypted else 13]
         data = json.dumps(state, separators=(",", ":")).encode()
         if encrypted:
             responses[connection] = cipher.encrypt(nonce[:12], data, header)

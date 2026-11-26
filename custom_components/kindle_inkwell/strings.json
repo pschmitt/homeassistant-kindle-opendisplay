@@ -50,6 +50,9 @@
       },
       "bssid": {
         "name": "BSSID"
+      },
+      "ip_address": {
+        "name": "IP address"
       }
     },
     "switch": {

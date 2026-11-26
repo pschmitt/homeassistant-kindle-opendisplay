@@ -67,6 +67,7 @@ case "${SSH_ORIGINAL_COMMAND:-}" in
     ;;
   info)
     exec python3 - <<'PY'
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -80,7 +81,7 @@ def read(path):
         return ""
 
 
-def wpa_value(command, key):
+def wpa_values(command):
     try:
         result = subprocess.run(
             ["wpa_cli", "-i", "wlan0", command],
@@ -90,9 +91,8 @@ def wpa_value(command, key):
             check=True,
         )
     except (OSError, subprocess.SubprocessError):
-        return ""
-    prefix = key + "="
-    return next((line[len(prefix):] for line in result.stdout.splitlines() if line.startswith(prefix)), "")
+        return {}
+    return dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
 
 
 firmware = read("/proc/1/root/etc/prettyversion.txt").removeprefix("Kindle ").split()
@@ -102,15 +102,20 @@ alpine = next(
      if line.startswith("VERSION_ID=")),
     None,
 )
-wifi = wpa_value("status", "wpa_state")
-ssid = wpa_value("status", "ssid") if wifi == "COMPLETED" else ""
-bssid = wpa_value("status", "bssid") if wifi == "COMPLETED" else ""
-rssi = wpa_value("signal_poll", "RSSI") if wifi == "COMPLETED" else ""
+status = wpa_values("status")
+wifi = status.get("wpa_state", "")
+connected = wifi == "COMPLETED"
+try:
+    ip_address = str(ipaddress.IPv4Address(status.get("ip_address", ""))) if connected else None
+except ipaddress.AddressValueError:
+    ip_address = None
+rssi = wpa_values("signal_poll").get("RSSI", "") if connected else ""
 print(json.dumps({
     "device_type": "Kindle Paperwhite 4 (10th generation)",
     "wifi": "connected" if wifi == "COMPLETED" else (wifi.lower() or "unknown"),
-    "ssid": ssid or None,
-    "bssid": bssid or None,
+    "ssid": status.get("ssid") if connected else None,
+    "bssid": status.get("bssid") if connected else None,
+    "ip_address": ip_address,
     "rssi_dbm": int(rssi) if rssi.lstrip("-").isdigit() else None,
     "kindle_firmware": firmware[0] if firmware else None,
     "kindle_build": build[0].removeprefix("System Software Version: ") if build else None,
