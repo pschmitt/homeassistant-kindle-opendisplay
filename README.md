@@ -10,8 +10,20 @@
 
 ## Install
 
-This is a working prototype. See [setup](docs/setup.md) for its dependencies,
-build instructions and current deployment limitations.
+This prototype needs a jailbroken Paperwhite 4 running Inkwell 1.3.0, a Home
+Assistant instance and a machine to run the bridge. Follow [setup](docs/setup.md)
+to configure credentials and install the dashboard.
+
+## Quick start
+
+After completing setup, start the bridge on the machine that can reach Home
+Assistant:
+
+```sh
+python3 bridge/bridge.py
+```
+
+Open Dashboard on the Kindle. The screen updates every two minutes in the demo.
 
 ## Documentation
 
