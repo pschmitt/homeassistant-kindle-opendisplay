@@ -21,8 +21,8 @@ pin its host key. Home Assistant Core needs the `ssh` executable on PATH.
 
 Under **Settings → Devices & services → Add integration**, select **Kindle Inkwell**.
 Enter the host alias and the absolute path to the SSH configuration inside
-Core. Enter the optional OpenDisplay Bluetooth address to group the Kindle
-entities under the same Home Assistant device.
+Core. Enter the optional OpenDisplay Bluetooth address to link the Kindle Inkwell
+device to its related OpenDisplay device in Home Assistant.
 
 Check that the new entities work before removing any old Command Line
 switches or sensors for the Kindle. Wi-Fi controls depend on the Kindle being

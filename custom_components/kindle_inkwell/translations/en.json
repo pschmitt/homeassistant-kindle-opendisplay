@@ -11,7 +11,7 @@
         "data_description": {
           "host": "An alias in the SSH configuration with a restricted key and a pinned host key.",
           "ssh_config": "Absolute path inside the Home Assistant Core container.",
-          "bluetooth_address": "Enter the address shown on the OpenDisplay device to group the entities together."
+          "bluetooth_address": "Enter the address shown on the OpenDisplay device to link the Kindle Inkwell and OpenDisplay devices."
         }
       }
     },

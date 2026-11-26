@@ -6,6 +6,14 @@ brightness=/sys/class/backlight/bl/brightness
 saved_level=/opt/opendisplay/frontlight-level
 read -r level < "$brightness"
 
+set_level() {
+  requested=$1
+  # The PW4 driver can set the value even if the write reports a failure.
+  printf '%s\n' "$requested" > "$brightness" || :
+  read -r applied < "$brightness"
+  [ "$applied" -eq "$requested" ]
+}
+
 case "${SSH_ORIGINAL_COMMAND:-}" in
   status)
     if [ "$level" -gt 0 ]
@@ -19,7 +27,7 @@ case "${SSH_ORIGINAL_COMMAND:-}" in
     if [ "$level" -gt 0 ]
     then
       printf '%s\n' "$level" > "$saved_level"
-      printf '%s\n' 0 > "$brightness"
+      set_level 0
     fi
     ;;
   on)
@@ -33,7 +41,7 @@ case "${SSH_ORIGINAL_COMMAND:-}" in
       read -r maximum < /sys/class/backlight/bl/max_brightness
       if [ "$level" -gt 0 ] && [ "$level" -le "$maximum" ]
       then
-        printf '%s\n' "$level" > "$brightness"
+        set_level "$level"
       else
         exit 1
       fi
