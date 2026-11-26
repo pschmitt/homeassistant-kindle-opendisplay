@@ -1,8 +1,8 @@
 """Client for the Kindle's restricted SSH command."""
 
 import asyncio
-from dataclasses import dataclass
 import json
+from dataclasses import dataclass
 
 
 class KindleError(Exception):

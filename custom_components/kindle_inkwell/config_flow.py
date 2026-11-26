@@ -1,11 +1,11 @@
 """Set up a Kindle with a restricted SSH connection."""
 
-from pathlib import PurePosixPath
 import re
+from pathlib import PurePosixPath
 
+import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST
-import voluptuous as vol
 
 from .api import KindleClient, KindleError
 from .const import CONF_BLUETOOTH_ADDRESS, CONF_SSH_CONFIG, DOMAIN

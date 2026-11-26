@@ -1,7 +1,7 @@
 """Poll Kindle telemetry in one update shared by all entities."""
 
-from datetime import timedelta
 import logging
+from datetime import timedelta
 
 from homeassistant.const import CONF_HOST
 from homeassistant.helpers.device_registry import CONNECTION_BLUETOOTH, DeviceInfo
