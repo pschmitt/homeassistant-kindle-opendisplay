@@ -1,0 +1,16 @@
+name: Validate Home Assistant integration
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: '20 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    uses: pschmitt/ci-workflows/.github/workflows/home-assistant.yaml@main
+    with:
+      lint-path: custom_components/kindle_inkwell
