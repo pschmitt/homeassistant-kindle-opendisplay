@@ -6,3 +6,5 @@ dashboard.conf
 dashboard.cache
 *.raw
 *.png
+/target/
+/result

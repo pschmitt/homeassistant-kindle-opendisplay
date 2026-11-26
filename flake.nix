@@ -3,10 +3,30 @@
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
+  inputs.crane.url = "github:ipetkov/crane";
+
   outputs =
-    { nixpkgs, ... }:
+    { crane, nixpkgs, ... }:
+    let
+      eachSystem = nixpkgs.lib.genAttrs [
+        "x86_64-linux"
+        "aarch64-linux"
+      ];
+    in
     {
-      devShells = nixpkgs.lib.genAttrs [ "x86_64-linux" "aarch64-linux" ] (
+      checks = eachSystem (
+        system:
+        let
+          craneLib = crane.mkLib nixpkgs.legacyPackages.${system};
+          src = craneLib.cleanCargoSource ./.;
+          cargoArtifacts = craneLib.buildDepsOnly { inherit src; };
+        in
+        {
+          protocol = craneLib.cargoTest { inherit src cargoArtifacts; };
+        }
+      );
+
+      devShells = eachSystem (
         system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
