@@ -75,6 +75,29 @@
   "exceptions": {
     "control_failed": {
       "message": "The Kindle did not apply the requested change."
+    },
+    "upload_connection_unavailable": {
+      "message": "The selected OpenDisplay device has no ready Kindle Inkwell BLE connection."
+    }
+  },
+  "services": {
+    "upload_image": {
+      "name": "Upload OpenDisplay image",
+      "description": "Send an image through native OpenDisplay while holding the Kindle BLE lock.",
+      "fields": {
+        "device_id": {
+          "name": "OpenDisplay device",
+          "description": "The OpenDisplay device associated with this Kindle."
+        },
+        "image": {
+          "name": "Image",
+          "description": "The Home Assistant media image to send."
+        },
+        "dither_mode": {
+          "name": "Dithering",
+          "description": "The dithering mode passed to OpenDisplay."
+        }
+      }
     }
   }
 }

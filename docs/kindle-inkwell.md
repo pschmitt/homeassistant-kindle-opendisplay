@@ -66,3 +66,9 @@ native OpenDisplay integration. Use the `opendisplay.upload_image` action
 with that device and a media image. A 1072 × 1448 portrait image fills the
 panel. This works from automations and scripts using the regular OpenDisplay
 action.
+
+The optional `kindle_inkwell.upload_image` action takes the same device,
+media image and upload options as `opendisplay.upload_image`. Select the
+OpenDisplay device on the same Bluetooth address as the Kindle Inkwell
+entry. This action holds the Kindle's BLE lock while calling OpenDisplay,
+so status polls and control commands wait for the image transfer.

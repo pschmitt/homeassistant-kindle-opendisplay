@@ -1,0 +1,16 @@
+upload_image:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: opendisplay
+    image:
+      required: true
+      selector:
+        media:
+          accept:
+            - image/*
+    dither_mode:
+      selector:
+        text:
