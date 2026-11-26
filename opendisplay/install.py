@@ -89,7 +89,7 @@ def install_dependencies(stage):
     )
 
 
-def install():
+def install(cpu_latency_us=None):
     """Install the receiver, its configuration and its boot hook."""
     if (
         os.geteuid() != 0
@@ -161,6 +161,8 @@ def install():
             shutil.copymode(INIT, staged_init)
             subprocess.run(["/bin/sh", "-n", staged_init], check=True)
             staged_init.replace(INIT)
+    if cpu_latency_us is not None:
+        (TARGET / "cpu-latency-us").write_text(f"{cpu_latency_us}\n")
     (TARGET / "autostart").touch()
     print(
         f"OpenDisplay installed for the next Inkwell boot ({json.loads(config.read_text())['address']})."
@@ -169,5 +171,11 @@ def install():
 
 
 if __name__ == "__main__":
-    argparse.ArgumentParser(description=__doc__).parse_args()
-    install()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--cpu-latency-us",
+        type=int,
+        choices=(0, 50),
+        help="Set the receiver's CPU idle latency limit. Omit to retain the installed setting.",
+    )
+    install(parser.parse_args().cpu_latency_us)

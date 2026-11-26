@@ -104,6 +104,20 @@ def render_pw4(frame):
         fcntl.ioctl(framebuffer, 0xC008462F, bytearray(struct.pack("=II", marker, 0)))
 
 
+def cpu_latency_limit(path):
+    """Read an optional per-device idle latency override."""
+    try:
+        value = int(path.read_text().strip())
+        if value in (0, 50):
+            return value
+        raise ValueError("expected 0 or 50")
+    except FileNotFoundError:
+        pass
+    except (OSError, ValueError):
+        LOG.warning("Ignoring invalid CPU latency override in %s", path)
+    return 0
+
+
 @contextmanager
 def kindle_radio():
     """Hold the PW4 UART clock and prepare the controller for cold HCI."""
@@ -122,7 +136,9 @@ def kindle_radio():
             )
 
         with open("/dev/cpu_dma_latency", "wb", buffering=0) as latency:
-            latency.write(struct.pack("=i", 0))
+            limit = cpu_latency_limit(Path(__file__).with_name("cpu-latency-us"))
+            latency.write(struct.pack("=i", limit))
+            LOG.info("Bluetooth CPU idle latency limit: %d µs", limit)
             clock.write_text("1\n")
             try:
                 (driver / "unbind").write_text(uart)

@@ -55,14 +55,24 @@ A local Bumble virtual-controller test connected, discovered service 0x2446, and
 
 ## Suspend and battery use
 
-The running receiver requests a zero-microsecond CPU idle latency limit
+By default, the receiver requests a zero-microsecond CPU idle latency limit
 and holds the Bluetooth UART clock on. A live sample on the Paperwhite 4
 entered only its shallow WFI state. In a short trial with a 50 μs latency
 limit, the Kindle spent 8.8 of 10 seconds in the deeper WAIT state. BLE
 discovery, a GATT read, and a Home Assistant image upload worked at this
 setting. The test used USB power, so it measured idle residency without
-measuring battery-life improvement. The shipped receiver still defaults
-to 0 μs.
+measuring battery-life improvement.
+
+Opt in to the tested 50 μs setting during installation:
+
+```sh
+python3 install.py --cpu-latency-us 50
+```
+
+On an installed Kindle, set `/opt/opendisplay/cpu-latency-us` to `50`.
+The receiver reads it on its next launch. The installer preserves the file
+on upgrades unless given an explicit value. Set it to `0` to restore the
+default.
 
 In a 35-second suspend-to-idle test, the receiver's BLE advertisements were
 initially visible. A client attempted a GATT connection, the read timed
@@ -71,7 +81,10 @@ battery-backed RTC alarm woke Linux after about 36 seconds and BLE
 advertising resumed. USB SSH recovered. Wi-Fi reassociated, but restoring
 its IPv4 lease required restarting the Wi-Fi DHCP client over USB. This test
 did not exercise deeper suspend modes. Keep the receiver awake if the
-display must accept on-demand updates.
+display must accept on-demand updates. A scheduled sleep mode would need
+an on-device RTC alarm, an HA upload during the awake window, and verified
+network recovery after wake. The e-ink panel can hold the last frame
+between updates.
 
 ## BTHome advertisements
 
