@@ -9,7 +9,7 @@ import secrets
 import time
 from pathlib import Path
 
-from bumble.att import ATT_Error, ATT_INSUFFICIENT_AUTHORIZATION_ERROR
+from bumble.att import ATT_INSUFFICIENT_AUTHORIZATION_ERROR, ATT_Error
 from bumble.core import UUID
 from bumble.gatt import Characteristic, CharacteristicValue, Service
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -102,12 +102,34 @@ async def perform(opcode):
     return await telemetry()
 
 
+async def reboot(stock):
+    """Select the next boot using Inkwell's flags and invoke the host reboot."""
+    await asyncio.sleep(5)
+    once = ROOT / "STOCK_ONCE"
+    previous = once.exists()
+    try:
+        if stock:
+            once.touch()
+        else:
+            once.unlink(missing_ok=True)
+        os.sync()
+        await command("/usr/local/bin/kindle", "/sbin/reboot")
+    except (OSError, TimeoutError):
+        if previous:
+            once.touch()
+        else:
+            once.unlink(missing_ok=True)
+        os.sync()
+        LOG.exception("Kindle reboot failed")
+
+
 def add_kindle_service(device, key):
     """Install the optional shared-key service on a Bumble peripheral."""
     if len(key) != 32:
         raise ValueError("Kindle BLE key must be 32 bytes")
     challenges = {}
     responses = {}
+    pending_reboot = None
     cipher = AESGCM(hmac.digest(key, b"kindle-control response encryption", "sha256"))
 
     def challenge(connection):
@@ -117,6 +139,7 @@ def add_kindle_service(device, key):
         return nonce
 
     async def request(connection, packet):
+        nonlocal pending_reboot
         current = challenges.pop(connection, None)
         if current is None or len(packet) != 17:
             raise ATT_Error(ATT_INSUFFICIENT_AUTHORIZATION_ERROR)
@@ -126,7 +149,16 @@ def add_kindle_service(device, key):
         if time.monotonic() > expires or not hmac.compare_digest(expected, packet[1:]):
             raise ATT_Error(ATT_INSUFFICIENT_AUTHORIZATION_ERROR)
         try:
-            state = await perform(packet[0] & 0x7F)
+            opcode = packet[0] & 0x7F
+            if opcode in (7, 8):
+                if not packet[0] & 0x80 or not (ROOT / "BOOT_OWN").is_file():
+                    raise ValueError("Inkwell boot selection is unavailable")
+                state = await telemetry()
+                if pending_reboot is not None and not pending_reboot.done():
+                    raise ValueError("Kindle reboot is already scheduled")
+                pending_reboot = asyncio.create_task(reboot(stock=opcode == 8))
+            else:
+                state = await perform(opcode)
         except (OSError, TimeoutError, ValueError, KeyError):
             LOG.exception("Kindle BLE control request failed")
             state = None

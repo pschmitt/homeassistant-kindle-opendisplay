@@ -35,6 +35,14 @@
       "ssh_enabled": {
         "default": "mdi:ssh"
       }
+    },
+    "button": {
+      "reboot_inkwell": {
+        "default": "mdi:restart"
+      },
+      "reboot_kindle_os": {
+        "default": "mdi:restart"
+      }
     }
   }
 }

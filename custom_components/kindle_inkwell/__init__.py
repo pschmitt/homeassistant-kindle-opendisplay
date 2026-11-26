@@ -1,17 +1,10 @@
-"""Expose Inkwell Kindle telemetry and frontlight in Home Assistant."""
+"""Expose Inkwell Kindle telemetry and controls in Home Assistant."""
 
 from homeassistant.const import Platform
 
 from .coordinator import KindleCoordinator
-from .dashboard import setup_dashboard
 
-PLATFORMS = (Platform.SENSOR, Platform.BINARY_SENSOR, Platform.SWITCH)
-
-
-async def async_setup(hass, config):
-    """Register dashboard actions."""
-    setup_dashboard(hass)
-    return True
+PLATFORMS = (Platform.SENSOR, Platform.BINARY_SENSOR, Platform.SWITCH, Platform.BUTTON)
 
 
 async def async_setup_entry(hass, entry):

@@ -1,4 +1,4 @@
-# Kindle Inkwell
+# Home Assistant integration
 
 The Kindle Inkwell integration uses an authenticated BLE service to read
 battery capacity, charging, SSID, BSSID and Wi-Fi signal strength. It also
@@ -8,21 +8,20 @@ integration handles image uploads and chip temperature on the same radio.
 
 ## Install
 
+[![Open this integration in Home Assistant Marketplace](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=pschmitt&repository=homeassistant-kindle-opendisplay&category=integration)
+
+The button opens the custom repository in Marketplace on Home Assistant
+2026.11 or later. While the GitHub repository is private, use a checkout
+with access and install manually if Marketplace cannot fetch it.
+
 Copy `custom_components/kindle_inkwell` to the corresponding directory in
 Home Assistant's configuration. For a submodule deployment, link the domain
 directory to its source tree on the server. Restart Home Assistant after
 installing or updating the integration.
 
-Follow the [receiver setup](opendisplay-ble.md) on the Kindle. Install
-`receiver.py`, `kindle_gatt.py` and the `frontlight` helper together under
-`/opt/opendisplay`.
-
-Generate a random 32-byte key encoded as 64 hexadecimal characters. Keep a
-mode-0600 copy at `/opt/opendisplay/control.key` on the Kindle and another in
-a private file readable by Home Assistant Core. Reload the Kindle receiver
-after installing the key. A receiver launched with `nohup` can inherit an
-ignored SIGHUP. Use the launcher from the Inkwell boot hook or start it with
-`setsid` when detaching manually.
+Run the [Kindle post-installer](opendisplay-ble.md#install-on-the-kindle).
+It creates the key at `/opt/opendisplay/control.key` on the Kindle. Copy it
+securely to a private mode-0600 file readable by Home Assistant Core.
 
 ## Configure
 
@@ -39,11 +38,18 @@ and SSH preferences persist through the normal Inkwell boot.
 Control requests use one-time challenges and a shared key. Telemetry is
 authenticated and encrypted. Keep the key out of source control.
 
-## Display a Home Assistant dashboard
+## Reboot
 
-Use the `kindle_inkwell.send_dashboard` action in an automation and select
-the Kindle's OpenDisplay device. Supply one to three rooms with temperature
-and CO₂ entities, an outdoor temperature entity, a weather entity, and an
-AIS Vessel Tracker last-passing-vessel entity. The dashboard shows the
-current weather condition and uses the AIS integration's cached photo when
-one is available. OpenDisplay sends the image over BLE.
+The **Reboot into Inkwell** button restarts the device into Inkwell.
+**Reboot into Kindle OS** selects Amazon's operating system for one boot.
+The next normal reboot from Kindle OS returns to Inkwell if its boot hook
+is enabled. The BLE buttons are available while the Inkwell receiver is
+running, so restart from the Kindle UI to return from Kindle OS.
+
+## Send an image
+
+Add the discovered **ODKindlePaperwhite4** device through Home Assistant's
+native OpenDisplay integration. Use the `opendisplay.upload_image` action
+with that device and a media image. A 1072 × 1448 portrait image fills the
+panel. This works from automations and scripts using the regular OpenDisplay
+action.

@@ -2,6 +2,25 @@
 
 The Inkwell Paperwhite 4 can use its internal Broadcom BCM4343A1 as an OpenDisplay BLE peripheral. The receiver advertises as `ODKindlePaperwhite4` with service and characteristic UUID `0x2446`. It supports the reference firmware's configuration read and monochrome direct-write commands for a 1072 × 1448 panel. A complete frame replaces the output file atomically. The receiver can save frames for testing or refresh the Kindle panel in OpenDisplay mode.
 
+## Install on the Kindle
+
+Install [Inkwell for Paperwhite 4](https://github.com/akaped/Inkwell) first.
+From a checkout of this repository, copy the `opendisplay/` directory to the
+Kindle. Run the following command as root inside Inkwell from the copied
+directory. The Kindle needs network access to PyPI and its Alpine package
+repositories.
+
+```sh
+python3 install.py
+```
+
+The installer stages the Python dependencies in `/opt/opendisplay`, creates
+a BLE address and control key if needed, and registers the receiver for
+the next Inkwell boot. It leaves the saved address and control key in place
+on upgrades. It reports the address for the
+[Home Assistant integration](kindle-inkwell.md). Start the launcher from
+an Inkwell shell or reboot into Inkwell when ready to activate the display.
+
 ## Controller bring-up
 
 The Lab126 4.1.15 kernel exposes /dev/ttymxc2 but has no attached HCI adapter under Inkwell. Bumble drives the controller over raw H4 UART. The successful initialization sequence keeps the SoC out of deep idle with /dev/cpu_dma_latency, enables the UART clock using /proc/bluetooth/sleep/uart_clk, rebinds only the Bluetooth UART (2034000.serial), enables Bluetooth through bt_pwr_ctrl, and asserts the active-low btwake line. The controller answers HCI Reset at 115200 baud with RTS/CTS. Its cold firmware accepts legacy connectable BLE advertising, so this path needs no Broadcom firmware download.
@@ -44,9 +63,9 @@ A local Bumble virtual-controller test connected, discovered service 0x2446, and
 
 The receiver includes the manufacturer data and four configuration records required by Home Assistant. Add the discovered **ODKindlePaperwhite4** device under OpenDisplay. It can be named **Kindle Paperwhite 4** in Home Assistant. Then call `opendisplay.upload_image` with the device and a media image. An active Bluetooth adapter or ESPHome proxy must be in range. Reload the OpenDisplay entry after changing receiver capabilities because Home Assistant caches the configuration.
 
-The receiver accepts raw and zlib-compressed frames. For panel output, install and run `/opt/opendisplay/start`. It pauses the Inkwell home process while the receiver owns the panel and resumes it on exit. Send SIGHUP to the launcher PID in `/run/opendisplay.pid` to reload the receiver without letting Home draw its lock screen or suspend the Kindle. Completed transfers use the PW4 EPDC full refresh ioctl and save the raw frame in `/opt/opendisplay/frame.bin`. The foreground dashboard remains available after exiting OpenDisplay mode. This mode holds the controller awake and is intended for a powered display.
+The receiver accepts raw and zlib-compressed frames. For panel output, install and run `/opt/opendisplay/start`. It pauses the Inkwell home process while the receiver owns the panel and resumes it on exit. Send SIGHUP to the launcher PID in `/run/opendisplay.pid` to reload the receiver without letting Home draw its lock screen or suspend the Kindle. Completed transfers use the PW4 EPDC full refresh ioctl and save the raw frame in `/opt/opendisplay/frame.bin`. This mode holds the controller awake and is intended for a powered display.
 
-On the configured Kindle, the Inkwell init hook starts the receiver after the usual boot checkpoint when `/opt/opendisplay/autostart` exists. To return to Inkwell home, remove that marker and send SIGTERM to the receiver PID in `/run/opendisplay.pid`. The original Inkwell init script is saved as `/sbin/own-init.pre-opendisplay`.
+The installer adds an Inkwell init hook that starts the receiver after the usual boot checkpoint when `/opt/opendisplay/autostart` exists. To return to Inkwell home, remove that marker and send SIGTERM to the receiver PID in `/run/opendisplay.pid`. The installer backs up the original Inkwell init script as `/sbin/own-init.pre-opendisplay`.
 
 `sensor.odkindle_temperature` is the Kindle's internal i.MX SoC temperature. The receiver refreshes the advertisement every 30 seconds when the encoded reading changes. It measures the chip, so it will be warmer than the room.
 

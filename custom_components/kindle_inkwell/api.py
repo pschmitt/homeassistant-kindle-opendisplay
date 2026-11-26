@@ -168,6 +168,11 @@ class KindleBleClient:
                 await asyncio.sleep(2)
                 return await self._exchange(opcode)
 
+    async def reboot(self, *, stock):
+        """Request a single reboot and await authenticated acknowledgement."""
+        async with self.lock:
+            await self._exchange(8 if stock else 7)
+
     async def _exchange(self, opcode):
         from bleak.exc import BleakError
         from bleak_retry_connector import (

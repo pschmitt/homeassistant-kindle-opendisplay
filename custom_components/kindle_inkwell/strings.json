@@ -62,39 +62,19 @@
       "ssh_enabled": {
         "name": "SSH (Wi-Fi)"
       }
+    },
+    "button": {
+      "reboot_inkwell": {
+        "name": "Reboot into Inkwell"
+      },
+      "reboot_kindle_os": {
+        "name": "Reboot into Kindle OS"
+      }
     }
   },
   "exceptions": {
     "control_failed": {
       "message": "The Kindle did not apply the requested change."
-    }
-  },
-  "services": {
-    "send_dashboard": {
-      "name": "Send dashboard",
-      "description": "Render a room, weather and vessel dashboard and upload it over OpenDisplay.",
-      "fields": {
-        "device_id": {
-          "name": "OpenDisplay device",
-          "description": "The e-paper display to refresh."
-        },
-        "rooms": {
-          "name": "Rooms",
-          "description": "One to three mappings with name, temperature entity ID and CO\u2082 entity ID."
-        },
-        "outdoor_temperature": {
-          "name": "Outdoor temperature",
-          "description": "The outdoor temperature sensor."
-        },
-        "weather": {
-          "name": "Weather",
-          "description": "The current weather entity."
-        },
-        "vessel": {
-          "name": "Last vessel",
-          "description": "The AIS last passing vessel sensor."
-        }
-      }
     }
   }
 }

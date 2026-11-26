@@ -2,46 +2,29 @@
 
 <h1 align="center">Kindle OpenDisplay for Home Assistant</h1>
 
-<p align="center">OpenDisplay BLE, Home Assistant device controls and an optional dashboard for a Kindle running Inkwell.</p>
+<p align="center">Use an Inkwell Kindle Paperwhite 4 as a Bluetooth e-ink display for Home Assistant.</p>
 
 ## Features
 
-- **OpenDisplay BLE:** send images to the e-ink panel from Home Assistant.
-- **Kindle Inkwell integration:** frontlight, battery, Wi-Fi and SSH controls over BLE.
-- **Full-screen display:** a clock, home measurements and the latest vessel.
-- **Vessel photo:** the AIS integration's photo, with photographer credit.
-- **Bridge:** a small authenticated HTTP server reads Home Assistant states.
+- **OpenDisplay BLE** sends images to the e-ink panel from Home Assistant.
+- **Kindle Inkwell** adds frontlight, Wi-Fi and SSH controls, battery and
+  device diagnostics, and buttons for rebooting into Inkwell or Kindle OS.
 
 ## Install
 
-For image uploads and Kindle telemetry, follow [OpenDisplay setup](docs/opendisplay-ble.md) and [Kindle Inkwell setup](docs/kindle-inkwell.md).
-
-The dashboard needs a jailbroken Paperwhite 4 running Inkwell 1.3.0, a Home
-Assistant instance and a machine to run the bridge. Follow [setup](docs/setup.md)
-to configure credentials and install the dashboard.
-
-## Quick start
-
-After completing setup, start the bridge on the machine that can reach Home
-Assistant:
-
-```sh
-python3 bridge/bridge.py
-```
-
-Open Dashboard on the Kindle. The screen updates every two minutes in the demo.
+Install the Paperwhite 4 port of [Inkwell](https://github.com/akaped/Inkwell).
+Run the [Kindle post-installer](docs/opendisplay-ble.md#install-on-the-kindle),
+then follow the [Home Assistant integration guide](docs/kindle-inkwell.md)
+to configure the display and controls.
 
 ## Documentation
 
 | Topic | Description |
 | --- | --- |
-| [Kindle Inkwell](docs/kindle-inkwell.md) | Install and configure the custom integration. |
-| [OpenDisplay BLE](docs/opendisplay-ble.md) | Kindle receiver, panel refresh and hardware findings. |
-| [Setup](docs/setup.md) | Build, credentials and deployment notes. |
+| [OpenDisplay BLE](docs/opendisplay-ble.md) | Kindle post-install, panel refresh, and Bluetooth hardware findings. |
+| [Home Assistant integration](docs/kindle-inkwell.md) | Marketplace link, pairing, BLE controls, and image uploads. |
+| [Tested device](docs/tested-device.md) | Hardware, firmware, and verification on the Paperwhite 4. |
 
 ## License
 
 This project is licensed under [GPL-3.0-only](LICENSE).
-
-The modified Inkwell files in `dashboard/` retain their upstream
-[MIT license](dashboard/LICENSE.upstream).
