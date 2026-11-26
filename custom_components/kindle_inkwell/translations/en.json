@@ -42,11 +42,14 @@
       "battery": {
         "name": "Battery"
       },
-      "wifi": {
-        "name": "Wi-Fi"
-      },
       "signal": {
         "name": "Wi-Fi signal"
+      },
+      "ssid": {
+        "name": "SSID"
+      },
+      "bssid": {
+        "name": "BSSID"
       }
     },
     "switch": {

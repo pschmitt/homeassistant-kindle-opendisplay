@@ -20,6 +20,10 @@ class KindleError(Exception):
     """The Kindle could not return a valid response."""
 
 
+class KindleLinkError(KindleError):
+    """A transient Bluetooth connection failure."""
+
+
 @dataclass(frozen=True)
 class KindleState:
     """The latest reported device state."""
@@ -37,6 +41,8 @@ class KindleState:
     alpine: str | None
     wifi_enabled: bool | None = None
     ssh_enabled: bool | None = None
+    ssid: str | None = None
+    bssid: str | None = None
 
 
 @dataclass(frozen=True)
@@ -149,11 +155,18 @@ class KindleBleClient:
 
     async def read(self):
         """Return current telemetry."""
-        return await self._exchange(0)
+        async with self.lock:
+            return await self._exchange(0)
 
     async def set_enabled(self, control, enabled):
         """Apply a switch change and return authenticated telemetry."""
-        return await self._exchange(_OPERATIONS[control][enabled])
+        opcode = _OPERATIONS[control][enabled]
+        async with self.lock:
+            try:
+                return await self._exchange(opcode)
+            except KindleLinkError:
+                await asyncio.sleep(2)
+                return await self._exchange(opcode)
 
     async def _exchange(self, opcode):
         from bleak.exc import BleakError
@@ -161,57 +174,59 @@ class KindleBleClient:
             BleakClientWithServiceCache,
             establish_connection,
         )
+        from cryptography.exceptions import InvalidTag
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
         from homeassistant.components.bluetooth import async_ble_device_from_address
 
-        async with self.lock:
-            device = async_ble_device_from_address(
-                self.hass, self.address, connectable=True
-            )
-            if device is None:
-                raise KindleError("No active Bluetooth connection path to the Kindle")
-            try:
-                async with asyncio.timeout(50):
-                    for attempt in range(2):
-                        client = await establish_connection(
-                            BleakClientWithServiceCache,
-                            device,
-                            "Kindle Inkwell",
-                            max_attempts=1,
-                            use_services_cache=attempt == 0,
-                        )
-                        if client.services.get_characteristic(_CHALLENGE) is not None:
-                            break
-                        try:
-                            if attempt == 1:
-                                raise KindleError("Kindle control service is missing")
-                            await client.clear_cache()
-                        finally:
-                            await client.disconnect()
+        device = async_ble_device_from_address(
+            self.hass, self.address, connectable=True
+        )
+        if device is None:
+            raise KindleLinkError("No active Bluetooth connection path to the Kindle")
+        try:
+            async with asyncio.timeout(50):
+                for attempt in range(2):
+                    client = await establish_connection(
+                        BleakClientWithServiceCache,
+                        device,
+                        "Kindle Inkwell",
+                        max_attempts=1,
+                        use_services_cache=attempt == 0,
+                    )
+                    if client.services.get_characteristic(_CHALLENGE) is not None:
+                        break
                     try:
-                        nonce = await client.read_gatt_char(_CHALLENGE)
-                        if len(nonce) != 16:
-                            raise KindleError("Invalid Kindle challenge")
-                        operation = bytes((opcode,))
-                        header = b"kindle-control-v1\0" + nonce + operation
-                        proof = hmac.digest(self.key, b"request\0" + header, "sha256")[
-                            :16
-                        ]
-                        await client.write_gatt_char(
-                            _REQUEST, operation + proof, response=True
-                        )
-                        raw = await client.read_gatt_char(_RESPONSE)
+                        if attempt == 1:
+                            raise KindleError("Kindle control service is missing")
+                        await client.clear_cache()
                     finally:
                         await client.disconnect()
-            except (BleakError, TimeoutError, OSError) as err:
-                raise KindleError("Kindle BLE connection or command failed") from err
+                try:
+                    nonce = await client.read_gatt_char(_CHALLENGE)
+                    if len(nonce) != 16:
+                        raise KindleError("Invalid Kindle challenge")
+                    operation = bytes((opcode | 0x80,))
+                    header = b"kindle-control-v1\0" + nonce + operation
+                    proof = hmac.digest(self.key, b"request\0" + header, "sha256")[:16]
+                    await client.write_gatt_char(
+                        _REQUEST, operation + proof, response=True
+                    )
+                    raw = await client.read_gatt_char(_RESPONSE)
+                finally:
+                    await client.disconnect()
+        except (BleakError, TimeoutError, OSError) as err:
+            raise KindleLinkError("Kindle BLE connection or command failed") from err
 
-        proof, data = raw[:16], raw[16:]
-        expected = hmac.digest(self.key, b"response\0" + header + data, "sha256")[:16]
-        if not hmac.compare_digest(proof, expected):
-            raise KindleError("Kindle BLE response authentication failed")
+        cipher = AESGCM(
+            hmac.digest(self.key, b"kindle-control response encryption", "sha256")
+        )
+        try:
+            data = cipher.decrypt(nonce[:12], raw, header)
+        except InvalidTag as err:
+            raise KindleError("Kindle BLE response authentication failed") from err
         try:
             fields = json.loads(data)
-            if not isinstance(fields, list) or len(fields) != 13:
+            if not isinstance(fields, list) or len(fields) != 15:
                 raise ValueError
             return KindleState(*fields)
         except (ValueError, TypeError) as err:

@@ -103,10 +103,14 @@ alpine = next(
     None,
 )
 wifi = wpa_value("status", "wpa_state")
+ssid = wpa_value("status", "ssid") if wifi == "COMPLETED" else ""
+bssid = wpa_value("status", "bssid") if wifi == "COMPLETED" else ""
 rssi = wpa_value("signal_poll", "RSSI") if wifi == "COMPLETED" else ""
 print(json.dumps({
     "device_type": "Kindle Paperwhite 4 (10th generation)",
     "wifi": "connected" if wifi == "COMPLETED" else (wifi.lower() or "unknown"),
+    "ssid": ssid or None,
+    "bssid": bssid or None,
     "rssi_dbm": int(rssi) if rssi.lstrip("-").isdigit() else None,
     "kindle_firmware": firmware[0] if firmware else None,
     "kindle_build": build[0].removeprefix("System Software Version: ") if build else None,

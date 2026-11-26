@@ -1,7 +1,7 @@
 # Kindle Inkwell
 
 The Kindle Inkwell integration uses an authenticated BLE service to read
-battery capacity, charging, Wi-Fi association and signal strength. It also
+battery capacity, charging, SSID, BSSID and Wi-Fi signal strength. It also
 controls the frontlight, Wi-Fi, and Wi-Fi SSH on port 2022. It reports the
 Kindle firmware, kernel and Alpine versions. The built-in OpenDisplay
 integration handles image uploads and chip temperature on the same radio.
@@ -36,6 +36,5 @@ turned off. Wi-Fi SSH controls the Inkwell listener on port 2022. USB SSH stays
 available. Turning Wi-Fi back on reconnects to the saved network. This uses Inkwell's association control, while the shared Bluetooth radio stays available. The Wi-Fi
 and SSH preferences persist through the normal Inkwell boot.
 
-Control requests and telemetry responses are authenticated with one-time
-challenges and a shared key. BLE telemetry travels in plaintext. Keep the
-key out of source control.
+Control requests use one-time challenges and a shared key. Telemetry is
+authenticated and encrypted. Keep the key out of source control.

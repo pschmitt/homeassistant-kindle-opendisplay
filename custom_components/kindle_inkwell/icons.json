@@ -9,11 +9,14 @@
       "battery": {
         "default": "mdi:battery"
       },
-      "wifi": {
-        "default": "mdi:wifi"
-      },
       "signal": {
         "default": "mdi:wifi-strength-2"
+      },
+      "ssid": {
+        "default": "mdi:wifi"
+      },
+      "bssid": {
+        "default": "mdi:access-point"
       }
     },
     "switch": {

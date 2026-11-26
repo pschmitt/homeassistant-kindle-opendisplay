@@ -12,6 +12,7 @@ from pathlib import Path
 from bumble.att import ATT_Error, ATT_INSUFFICIENT_AUTHORIZATION_ERROR
 from bumble.core import UUID
 from bumble.gatt import Characteristic, CharacteristicValue, Service
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 ROOT = Path("/mnt/us/linux")
 UUIDS = [UUID(f"884cc76{index}-ea3a-4b7b-a8bd-114c4e5342ae") for index in range(4)]
@@ -66,6 +67,8 @@ async def telemetry():
         device["alpine_version"],
         wifi_enabled,
         ssh == "on",
+        device.get("ssid") if wifi_enabled else None,
+        device.get("bssid") if wifi_enabled else None,
     ]
 
 
@@ -105,6 +108,7 @@ def add_kindle_service(device, key):
         raise ValueError("Kindle BLE key must be 32 bytes")
     challenges = {}
     responses = {}
+    cipher = AESGCM(hmac.digest(key, b"kindle-control response encryption", "sha256"))
 
     def challenge(connection):
         nonce = secrets.token_bytes(16)
@@ -122,14 +126,21 @@ def add_kindle_service(device, key):
         if time.monotonic() > expires or not hmac.compare_digest(expected, packet[1:]):
             raise ATT_Error(ATT_INSUFFICIENT_AUTHORIZATION_ERROR)
         try:
-            state = await perform(packet[0])
+            state = await perform(packet[0] & 0x7F)
         except (OSError, TimeoutError, ValueError, KeyError):
             LOG.exception("Kindle BLE control request failed")
             state = None
+        encrypted = bool(packet[0] & 0x80)
+        # Legacy clients never receive network identifiers in plaintext.
+        if state is not None and not encrypted:
+            state = state[:13]
         data = json.dumps(state, separators=(",", ":")).encode()
-        responses[connection] = (
-            hmac.digest(key, b"response\0" + header + data, "sha256")[:16] + data
-        )
+        if encrypted:
+            responses[connection] = cipher.encrypt(nonce[:12], data, header)
+        else:
+            responses[connection] = (
+                hmac.digest(key, b"response\0" + header + data, "sha256")[:16] + data
+            )
 
     def response(connection):
         if connection not in responses:

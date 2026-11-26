@@ -19,7 +19,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities(
         (
             KindleBattery(entry.runtime_data, "battery"),
-            KindleWifi(entry.runtime_data, "wifi"),
+            KindleNetwork(entry.runtime_data, "ssid"),
+            KindleNetwork(entry.runtime_data, "bssid"),
             KindleSignal(entry.runtime_data, "signal"),
         )
     )
@@ -45,21 +46,26 @@ class KindleBattery(KindleEntity, SensorEntity):
             return {"charging": state.charging, "status": state.battery_status}
 
 
-class KindleWifi(KindleEntity, SensorEntity):
-    """Read-only association state and firmware metadata."""
+class KindleNetwork(KindleEntity, SensorEntity):
+    """Associated network and firmware metadata."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
+    def __init__(self, coordinator, key):
+        """Select the associated network field."""
+        super().__init__(coordinator, key)
+        self.key = key
+
     @property
     def native_value(self):
-        """Return the Wi-Fi association state."""
+        """Return the SSID or BSSID."""
         if state := self.coordinator.data:
-            return state.wifi
+            return getattr(state, self.key)
 
     @property
     def extra_state_attributes(self):
         """Return the hardware and software versions."""
-        if state := self.coordinator.data:
+        if self.key == "ssid" and (state := self.coordinator.data):
             return {
                 "device_type": state.model,
                 "rssi_dbm": state.rssi,
