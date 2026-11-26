@@ -53,8 +53,19 @@ The output is a 194,032-byte packed monochrome frame. The command above saves fr
 
 A local Bumble virtual-controller test connected, discovered service 0x2446, and received the configuration. A protocol test also used 20-byte ATT payloads and verified CRC, peer isolation, rejection of a truncated upload, and an exact full frame. A separate physical host discovered the Kindle over BLE, read the configuration, and sent a full 194,032-byte frame in 180-byte chunks. The sender and the Kindle produced the same SHA-256 digest. Wi-Fi SSH remained available throughout.
 
+## BTHome advertisements
+
+On the Paperwhite 4, the receiver includes BTHome v2 battery percentage and
+charging in its legacy advertisement and refreshes readings every 30 seconds.
+It keeps the OpenDisplay manufacturer data in the primary packet and fits the
+name and OpenDisplay service UUID list in the scan response. Long custom names
+can use the full scan response, in which case the UUID remains available from
+GATT discovery. This layout keeps the passive BTHome data in the primary
+packet.
+
 ## References
 
+- [BTHome v2 packet format](https://bthome.io/format/)
 - [OpenDisplay BLE command flow](https://www.opendisplay.org/protocol/ble-flow.html)
 - [Broadcom initialization in kindle-hid-passthrough](https://github.com/zampierilucas/kindle-hid-passthrough/blob/main/kindle_hid_passthrough/bt_brcm.py)
 - [Inkwell PW4 port and USB networking](https://github.com/akaped/Inkwell)

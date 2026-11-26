@@ -18,7 +18,10 @@ from pathlib import Path
 WIDTH, HEIGHT = 1072, 1448
 FRAME_BYTES = (WIDTH // 8) * HEIGHT
 KINDLE_TRANSPORT = "serial:/dev/ttymxc2,115200,rtscts"
-ADVERTISEMENT_PREFIX = b"\x02\x01\x06\x03\x03\x46\x24\x11\xff"
+AD_FLAGS = b"\x02\x01\x06"
+OPENDISPLAY_UUID_LIST = b"\x03\x03\x46\x24"
+OPENDISPLAY_MANUFACTURER_HEADER = b"\x11\xff"
+BATTERY = Path("/sys/class/power_supply/bd71827_bat")
 PIXELS = tuple(
     bytes(255 if value & (128 >> bit) else 0 for bit in range(8))
     for value in range(256)
@@ -37,6 +40,33 @@ def manufacturer_data():
         except (OSError, ValueError):
             continue
     return b"\x46\x24" + bytes(11) + bytes((temperature, 0, 0))
+
+
+def battery_service_data(battery=BATTERY):
+    """Return a BTHome v2 advertisement with battery and charging status."""
+    try:
+        capacity = int((battery / "capacity").read_text())
+        status = (battery / "status").read_text().strip()
+    except (OSError, ValueError):
+        return b""
+    if not 0 <= capacity <= 100:
+        return b""
+    data = bytes((0x40, 0x01, capacity))
+    if status in {"Charging", "Discharging", "Full", "Not charging"}:
+        data += bytes((0x16, status == "Charging"))
+    return bytes((len(data) + 3, 0x16, 0xD2, 0xFC)) + data
+
+
+def advertisements(name, *, announce_battery):
+    """Fit OpenDisplay and optional BTHome data in legacy BLE packets."""
+    manufacturer = OPENDISPLAY_MANUFACTURER_HEADER + manufacturer_data()
+    scan_response = bytes((len(name) + 1, 0x09)) + name
+    if announce_battery:
+        # Move the UUID list to the scan response so BTHome supports passive scans.
+        if len(scan_response) + len(OPENDISPLAY_UUID_LIST) <= 31:
+            scan_response += OPENDISPLAY_UUID_LIST
+        return AD_FLAGS + manufacturer + battery_service_data(), scan_response
+    return AD_FLAGS + OPENDISPLAY_UUID_LIST + manufacturer, scan_response
 
 
 def render_pw4(frame):
@@ -295,8 +325,10 @@ async def serve(transport, device_config, output, render=None, control_key=None)
             from kindle_gatt import add_kindle_service
 
             add_kindle_service(device, control_key)
-        device.advertising_data = ADVERTISEMENT_PREFIX + manufacturer_data()
-        device.scan_response_data = bytes((len(name) + 1, 0x09)) + name
+        announce_battery = transport == KINDLE_TRANSPORT
+        device.advertising_data, device.scan_response_data = advertisements(
+            name, announce_battery=announce_battery
+        )
         await device.power_on()
         await device.start_advertising(auto_restart=True)
         LOG.info("OpenDisplay BLE advertising started")
@@ -304,7 +336,7 @@ async def serve(transport, device_config, output, render=None, control_key=None)
             done, _ = await asyncio.wait([hci.source.terminated], timeout=30)
             if done:
                 break
-            data = ADVERTISEMENT_PREFIX + manufacturer_data()
+            data, _ = advertisements(name, announce_battery=announce_battery)
             if data != device.advertising_data:
                 device.advertising_data = data
                 if device.legacy_advertiser and not device.connections:

@@ -38,6 +38,16 @@ and SSH preferences persist through the normal Inkwell boot.
 Control requests use one-time challenges and a shared key. Telemetry is
 authenticated and encrypted. Keep the key out of source control.
 
+## Passive battery monitoring
+
+Add the discovered Kindle under Home Assistant's built-in **BTHome**
+integration to receive battery percentage and charging status from BLE
+advertisements. This needs no bindkey and works with a passive Bluetooth
+scanner. The two readings are visible to nearby BLE receivers. The Kindle
+Inkwell integration retains its existing battery entities and uses the
+authenticated connection for controls and detailed status, including SSID
+and BSSID.
+
 ## Reboot
 
 The **Reboot into Inkwell** button restarts the device into Inkwell.
