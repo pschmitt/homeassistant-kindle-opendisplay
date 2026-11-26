@@ -1,0 +1,116 @@
+#!/bin/sh
+# Forced SSH command for frontlight control and battery telemetry.
+set -eu
+
+brightness=/sys/class/backlight/bl/brightness
+saved_level=/opt/opendisplay/frontlight-level
+read -r level < "$brightness"
+
+case "${SSH_ORIGINAL_COMMAND:-}" in
+  status)
+    if [ "$level" -gt 0 ]
+    then
+      printf '%s\n' ON
+    else
+      printf '%s\n' OFF
+    fi
+    ;;
+  off)
+    if [ "$level" -gt 0 ]
+    then
+      printf '%s\n' "$level" > "$saved_level"
+      printf '%s\n' 0 > "$brightness"
+    fi
+    ;;
+  on)
+    if [ "$level" -eq 0 ]
+    then
+      level=297
+      if [ -s "$saved_level" ]
+      then
+        read -r level < "$saved_level"
+      fi
+      read -r maximum < /sys/class/backlight/bl/max_brightness
+      if [ "$level" -gt 0 ] && [ "$level" -le "$maximum" ]
+      then
+        printf '%s\n' "$level" > "$brightness"
+      else
+        exit 1
+      fi
+    fi
+    ;;
+  battery)
+    battery=/sys/class/power_supply/bd71827_bat
+    read -r capacity < "$battery/capacity"
+    read -r status < "$battery/status"
+    case "$capacity" in
+      ''|*[!0-9]*) exit 1 ;;
+    esac
+    case "$status" in
+      Charging|Discharging|Full|'Not charging'|Unknown) ;;
+      *) exit 1 ;;
+    esac
+    charging=false
+    if [ "$status" = Charging ]
+    then
+      charging=true
+    fi
+    printf '{"capacity":%s,"status":"%s","charging":%s}\n' "$capacity" "$status" "$charging"
+    ;;
+  info)
+    exec python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+import subprocess
+
+
+def read(path):
+    try:
+        return Path(path).read_text().strip()
+    except OSError:
+        return ""
+
+
+def wpa_value(command, key):
+    try:
+        result = subprocess.run(
+            ["wpa_cli", "-i", "wlan0", command],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    prefix = key + "="
+    return next((line[len(prefix):] for line in result.stdout.splitlines() if line.startswith(prefix)), "")
+
+
+firmware = read("/proc/1/root/etc/prettyversion.txt").removeprefix("Kindle ").split()
+build = read("/proc/1/root/etc/version.txt").splitlines()
+alpine = next(
+    (line.removeprefix("VERSION_ID=").strip('"') for line in read("/etc/os-release").splitlines()
+     if line.startswith("VERSION_ID=")),
+    None,
+)
+wifi = wpa_value("status", "wpa_state")
+rssi = wpa_value("signal_poll", "RSSI") if wifi == "COMPLETED" else ""
+print(json.dumps({
+    "device_type": "Kindle Paperwhite 4 (10th generation)",
+    "wifi": "connected" if wifi == "COMPLETED" else (wifi.lower() or "unknown"),
+    "rssi_dbm": int(rssi) if rssi.lstrip("-").isdigit() else None,
+    "kindle_firmware": firmware[0] if firmware else None,
+    "kindle_build": build[0].removeprefix("System Software Version: ") if build else None,
+    "kernel_release": os.uname().release,
+    "alpine_version": alpine,
+}))
+PY
+    ;;
+  *)
+    printf '%s\n' 'Expected Kindle command: on, off, status, battery, or info' >&2
+    exit 2
+    ;;
+esac
+
+# vim: set sw=2 ts=2 et:
