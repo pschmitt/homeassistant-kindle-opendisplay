@@ -53,6 +53,23 @@ The output is a 194,032-byte packed monochrome frame. The command above saves fr
 
 A local Bumble virtual-controller test connected, discovered service 0x2446, and received the configuration. A protocol test also used 20-byte ATT payloads and verified CRC, peer isolation, rejection of a truncated upload, and an exact full frame. A separate physical host discovered the Kindle over BLE, read the configuration, and sent a full 194,032-byte frame in 180-byte chunks. The sender and the Kindle produced the same SHA-256 digest. Wi-Fi SSH remained available throughout.
 
+## Suspend and battery use
+
+The running receiver requests a zero-microsecond CPU idle latency limit
+and holds the Bluetooth UART clock on. A live sample on the Paperwhite 4
+entered only its shallow WFI state. The kernel also exposes a 50 μs WAIT
+state. Testing that latency limit while keeping the receiver available is
+a possible way to reduce idle power.
+
+In a 35-second suspend-to-idle test, the receiver's BLE advertisements were
+initially visible. A client attempted a GATT connection, the read timed
+out, and the Bluetooth host-wake interrupt count stayed unchanged. A
+battery-backed RTC alarm woke Linux after about 36 seconds and BLE
+advertising resumed. USB SSH recovered. Wi-Fi reassociated, but restoring
+its IPv4 lease required restarting the Wi-Fi DHCP client over USB. This test
+did not exercise deeper suspend modes. Keep the receiver awake if the
+display must accept on-demand updates.
+
 ## BTHome advertisements
 
 On the Paperwhite 4, the receiver includes BTHome v2 battery percentage and
