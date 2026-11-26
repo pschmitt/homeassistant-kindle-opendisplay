@@ -4,6 +4,7 @@
 """Exercise the Rust receiver over H4, GAP, and GATT without Kindle hardware."""
 
 import asyncio
+import hmac
 import json
 import sys
 import tempfile
@@ -12,14 +13,18 @@ from contextlib import suppress
 from pathlib import Path
 
 from bumble import hci
+from bumble.att import ATT_Error
 from bumble.controller import Controller
 from bumble.core import UUID
 from bumble.device import Device, Peer
 from bumble.link import LocalLink
 from bumble.transport.common import PacketParser
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 ADDRESS = "C2:00:00:00:00:02"
 FRAME_BYTES = 1072 // 8 * 1448
+KEY = bytes(range(32))
+CONTEXT = b"kindle-control-v1\0"
 
 
 class Sink:
@@ -56,6 +61,7 @@ async def run(binary, directory):
 
     identity = directory / "device.json"
     identity.write_text(json.dumps({"name": "ODTest", "address": ADDRESS}))
+    (directory / "control.key").write_text(KEY.hex())
     frame_path = directory / "frame.raw"
     server = await asyncio.start_server(transport, "127.0.0.1", 0)
     async with server:
@@ -65,7 +71,6 @@ async def run(binary, directory):
             f"tcp:127.0.0.1:{port}",
             str(identity),
             str(frame_path),
-            "--experimental-display-only",
             stderr=asyncio.subprocess.PIPE,
         )
         try:
@@ -110,8 +115,47 @@ async def transfer(central, frame_path):
         assert await send(0x72) == b"\x00\x72"
         assert await responses.get() == b"\x00\x73"
         assert frame_path.read_bytes() == frame
+        await authenticated_control(peer)
     finally:
         await connection.disconnect()
+
+
+async def authenticated_control(peer):
+    uuids = [UUID(f"884cc76{i}-ea3a-4b7b-a8bd-114c4e5342ae") for i in range(4)]
+    (service,) = await peer.discover_services(uuids[:1])
+    challenge, request, response = await peer.discover_characteristics(
+        uuids[1:], service
+    )
+
+    async def expect_denied(operation):
+        try:
+            await operation
+        except ATT_Error as error:
+            assert error.error_code == 8, error
+        else:
+            raise AssertionError("unauthenticated control was accepted")
+
+    await expect_denied(peer.read_value(response))
+    nonce = await peer.read_value(challenge)
+    assert len(nonce) == 16
+    header = CONTEXT + nonce + b"\x89"
+    key = hmac.digest(KEY, b"kindle-control command request encryption", "sha256")
+    packet = b"\x89" + AESGCM(key).encrypt(nonce[:12], b"id", header)
+    await peer.write_value(request, packet, with_response=True)
+    key = hmac.digest(KEY, b"kindle-control response encryption", "sha256")
+    sealed = await peer.read_value(response)
+    assert json.loads(AESGCM(key).decrypt(nonce[:12], sealed, header)) == {
+        "error": "disabled"
+    }
+    await expect_denied(peer.write_value(request, packet, with_response=True))
+
+    nonce = await peer.read_value(challenge)
+    header = CONTEXT + nonce + b"\xc0"
+    packet = b"\xc0" + hmac.digest(KEY, b"request\0" + header, "sha256")[:16]
+    await peer.write_value(request, packet, with_response=True)
+    sealed = await peer.read_value(response)
+    # This transport intentionally has no Paperwhite sensors.
+    assert AESGCM(key).decrypt(nonce[:12], sealed, header) == b"null"
 
 
 async def main():

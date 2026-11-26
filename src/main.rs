@@ -1,11 +1,17 @@
+mod actions;
 mod advertising;
+mod control;
+mod settings;
 
+use actions::Actions;
 use anyhow::{Context, Result, bail, ensure};
 use bt_hci_serial::SerialTransport;
+use control::Session;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embedded_io_adapters::tokio_1::FromTokio;
 use kindle_opendisplay::{Connection as Display, Event, paperwhite, render_status};
 use serde::Deserialize;
+use settings::Settings;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -13,17 +19,79 @@ use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::signal::unix::{SignalKind, signal};
 use tokio_serial::{FlowControl, SerialStream};
+use trouble_host::att::{AttClient, AttErrorCode, AttReq};
 use trouble_host::prelude::*;
 
-#[gatt_server]
-struct Server {
-    display: DisplayService,
+type Response = heapless::Vec<u8, 512>;
+
+struct Controls {
+    challenge: Characteristic<[u8; 16]>,
+    request: Characteristic<()>,
+    response: Characteristic<Response>,
 }
 
-#[gatt_service(uuid = "2446")]
-struct DisplayService {
-    #[characteristic(uuid = "2446", read, write, write_without_response, notify)]
-    command: (),
+fn control_uuid(index: u8) -> u128 {
+    0x884cc760_ea3a_4b7b_a8bd_114c4e5342ae | (u128::from(index) << 96)
+}
+
+struct Gatt<'a> {
+    server: AttributeServer<'a, NoopRawMutex, DefaultPacketPool, 32, 1>,
+    display: Option<Characteristic<()>>,
+    controls: Option<Controls>,
+}
+
+impl<'a> Gatt<'a> {
+    fn new(
+        name: &'a str,
+        show_display: bool,
+        response_store: &'a mut [u8; 512],
+        controls: bool,
+    ) -> Self {
+        use CharacteristicProp::{Notify, Read, Write, WriteWithoutResponse};
+
+        let mut table = AttributeTable::new();
+        let mut gap = table.add_service(Service::new(service::GAP));
+        gap.add_characteristic_ro(characteristic::DEVICE_NAME, name)
+            .build();
+        gap.add_characteristic_ro(characteristic::APPEARANCE, &0u16)
+            .build();
+        gap.build();
+        let display = show_display.then(|| {
+            let mut service = table.add_service(Service::new(0x2446u16));
+            let display = service
+                .add_characteristic_small(
+                    0x2446u16,
+                    [Read, Write, WriteWithoutResponse, Notify],
+                    (),
+                )
+                .build();
+            service.build();
+            display
+        });
+        let controls = controls.then(|| {
+            let mut service = table.add_service(Service::new(control_uuid(0)));
+            let challenge = service
+                .add_characteristic_small(control_uuid(1), [Read], [0u8; 16])
+                .build();
+            let request = service
+                .add_characteristic_small(control_uuid(2), [Write], ())
+                .build();
+            let response = service
+                .add_characteristic(control_uuid(3), [Read], Response::new(), response_store)
+                .build();
+            service.build();
+            Controls {
+                challenge,
+                request,
+                response,
+            }
+        });
+        Self {
+            server: AttributeServer::new(table),
+            display,
+            controls,
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -54,73 +122,75 @@ impl Identity {
     }
 }
 
-#[derive(Deserialize)]
-#[serde(default)]
-struct Settings {
-    opendisplay: bool,
-    battery_advertising: bool,
-    cpu_latency_us: i32,
-}
-
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            opendisplay: true,
-            battery_advertising: true,
-            cpu_latency_us: 0,
-        }
-    }
-}
-
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     let mut args = std::env::args_os().skip(1);
     let (Some(transport), Some(identity), Some(output)) = (args.next(), args.next(), args.next())
     else {
         bail!(
-            "usage: kindle-opendisplay <kindle-pw4|tcp:HOST:PORT> <device.json> <frame.raw> --experimental-display-only [--render]"
+            "usage: kindle-opendisplay <kindle-pw4|tcp:HOST:PORT> <device.json> <frame.raw> [--render] [--autostart] [--control-key-file PATH]"
         );
     };
-    ensure!(
-        args.next()
-            .is_some_and(|arg| arg == "--experimental-display-only"),
-        "Rust control parity is pending; pass --experimental-display-only for isolated display testing"
-    );
-    let render = match args.next() {
-        None => false,
-        Some(arg) if arg == "--render" => true,
-        Some(_) => bail!("unknown option"),
-    };
-    ensure!(args.next().is_none(), "unexpected argument");
+    let mut render = false;
+    let mut autostart = false;
+    let mut key_path = None;
+    while let Some(flag) = args.next() {
+        match flag.to_str() {
+            Some("--render") => render = true,
+            Some("--autostart") => autostart = true,
+            Some("--control-key-file") => {
+                key_path = Some(PathBuf::from(
+                    args.next().context("missing control key path")?,
+                ))
+            }
+            _ => bail!("unknown option"),
+        }
+    }
     let identity = PathBuf::from(identity);
-    let settings_path = identity.with_file_name("config.toml");
-    let settings: Settings = match fs::read_to_string(&settings_path) {
-        Ok(data) => toml::from_str(&data).context("invalid config.toml")?,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Settings::default(),
-        Err(err) => return Err(err).context("read config.toml"),
+    let directory = identity.parent().context("invalid identity path")?;
+    let settings = Settings::load(directory)?;
+    if autostart && !settings.autostart {
+        return Ok(());
+    }
+    let key = if settings.controls {
+        let explicit = key_path.is_some();
+        match fs::read_to_string(key_path.unwrap_or_else(|| directory.join("control.key"))) {
+            Ok(data) => {
+                let mut key = [0; 32];
+                hex::decode_to_slice(data.trim(), &mut key).context("invalid control key")?;
+                Some(key)
+            }
+            Err(error) if !explicit && error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => return Err(error).context("read control key"),
+        }
+    } else {
+        None
     };
-    ensure!(
-        settings.opendisplay,
-        "OpenDisplay is disabled in config.toml"
-    );
-    ensure!(
-        matches!(settings.cpu_latency_us, 0 | 50),
-        "cpu_latency_us must be 0 or 50"
-    );
     let identity: Identity =
         serde_json::from_slice(&fs::read(identity)?).context("invalid BLE identity")?;
     ensure!(
         identity.name.starts_with("OD") && identity.name.len() <= 29,
         "BLE name must start with OD and fit the scan response"
     );
+    let address = identity.address()?;
     let output = PathBuf::from(output);
     let transport = transport.to_str().context("invalid transport")?;
+    let on_device = transport == "kindle-pw4";
+    let config = ReceiverConfig {
+        name: &identity.name,
+        address,
+        output: &output,
+        settings: &settings,
+        key: key.as_ref(),
+        on_device,
+        render,
+    };
     if let Some(address) = transport.strip_prefix("tcp:") {
         ensure!(!render, "render requires the Paperwhite transport");
         let stream = tokio::net::TcpStream::connect(address).await?;
-        return serve(stream, &identity, &output, false, false).await;
+        return serve(stream, config).await;
     }
-    ensure!(transport == "kindle-pw4", "invalid transport");
+    ensure!(on_device, "invalid transport");
     let _radio = paperwhite::Radio::acquire(settings.cpu_latency_us)
         .context("prepare Paperwhite Bluetooth controller")?;
     let serial = SerialStream::open(
@@ -128,22 +198,22 @@ async fn main() -> Result<()> {
             .flow_control(FlowControl::Hardware),
     )
     .context("open Paperwhite Bluetooth UART")?;
-    serve(
-        serial,
-        &identity,
-        &output,
-        settings.battery_advertising,
-        render,
-    )
-    .await
+    serve(serial, config).await
+}
+
+struct ReceiverConfig<'a> {
+    name: &'a str,
+    address: Address,
+    output: &'a Path,
+    settings: &'a Settings,
+    key: Option<&'a [u8; 32]>,
+    on_device: bool,
+    render: bool,
 }
 
 async fn serve(
     stream: impl AsyncRead + AsyncWrite + Unpin,
-    identity: &Identity,
-    output: &Path,
-    battery: bool,
-    render: bool,
+    config: ReceiverConfig<'_>,
 ) -> Result<()> {
     let (reader, writer) = tokio::io::split(stream);
     let transport =
@@ -151,20 +221,27 @@ async fn serve(
     let controller: ExternalController<_, 10> = ExternalController::new(transport);
     let mut resources: HostResources<DefaultPacketPool, 1, 2> = HostResources::new();
     let stack = trouble_host::new(controller, &mut resources)
-        .set_random_address(identity.address()?)
+        .set_random_address(config.address)
         .build();
     let mut runner = stack.runner();
     let mut peripheral = stack.peripheral();
-    let server = Server::new_with_config(GapConfig::Peripheral(PeripheralConfig {
-        name: &identity.name,
-        appearance: &appearance::power_device::GENERIC_POWER_DEVICE,
-    }))
-    .map_err(|e| anyhow::anyhow!("configure GATT: {e:?}"))?;
+    let mut response_store = [0u8; 512];
+    let gatt_server = Gatt::new(
+        config.name,
+        config.settings.opendisplay,
+        &mut response_store,
+        config.key.is_some(),
+    );
+    let mut actions = Actions::new(&config.settings.commands, config.on_device);
     let mut term = signal(SignalKind::terminate())?;
     let gatt = async {
         let mut announced = false;
         loop {
-            let (data, scan) = advertising::packets(&identity.name, battery);
+            let (data, scan) = advertising::packets(
+                config.name,
+                config.on_device && config.settings.battery_advertising,
+                config.settings.opendisplay,
+            );
             let advertisement = peripheral
                 .advertise(
                     &Default::default(),
@@ -184,9 +261,10 @@ async fn serve(
             {
                 let connection = connection
                     .map_err(|e| anyhow::anyhow!("accept BLE connection: {e:?}"))?
-                    .with_attribute_server(&server)
+                    .with_attribute_server(&gatt_server.server)
                     .map_err(|e| anyhow::anyhow!("attach GATT server: {e:?}"))?;
-                if let Err(error) = receive(&server, &connection, output, render).await {
+                if let Err(error) = receive(&gatt_server, &connection, &config, &mut actions).await
+                {
                     eprintln!("OpenDisplay connection ended: {error:#}");
                 }
             }
@@ -203,13 +281,19 @@ async fn serve(
 }
 
 async fn receive(
-    server: &Server<'_>,
+    gatt: &Gatt<'_>,
     connection: &GattConnection<'_, '_, DefaultPacketPool>,
-    output: &Path,
-    render: bool,
+    config: &ReceiverConfig<'_>,
+    actions: &mut Actions<'_>,
 ) -> Result<()> {
-    let command = server.display.command;
     let mut display = Display::default();
+    let mut session = config.key.map(Session::new);
+    if let Some(handles) = &gatt.controls {
+        connection
+            .set(&handles.challenge, &[0; 16])
+            .map_err(|error| anyhow::anyhow!("clear prior nonce: {error:?}"))?;
+        clear_response(connection, handles)?;
+    }
     loop {
         let GattConnectionEvent::Gatt { event } = (match connection.next().await {
             GattConnectionEvent::Disconnected { .. } => return Ok(()),
@@ -218,7 +302,11 @@ async fn receive(
             continue;
         };
         let events = match event {
-            GattEvent::Write(write) if write.handle() == command.handle => {
+            GattEvent::Write(write)
+                if gatt
+                    .display
+                    .is_some_and(|command| command.handle == write.handle()) =>
+            {
                 let events = write.with_data(|offset, data| {
                     if offset == 0 {
                         let limit = usize::from(connection.raw().att_mtu()).saturating_sub(3);
@@ -232,18 +320,22 @@ async fn receive(
                 }
                 events
             }
-            event => {
-                if let Ok(reply) = event.accept() {
+            other => {
+                if let (Some(handles), Some(session)) = (&gatt.controls, &mut session) {
+                    control_event(other, handles, session, actions, connection).await?;
+                } else if let Ok(reply) = other.accept() {
                     reply.send().await;
                 }
                 continue;
             }
         };
+        let command = gatt.display.context("missing display characteristic")?;
         for event in events {
             let data = match event {
                 Event::Notify(data) => data,
                 Event::Render(frame) => {
-                    let output = output.to_path_buf();
+                    let output = config.output.to_path_buf();
+                    let render = config.render;
                     let result =
                         tokio::task::spawn_blocking(move || finish_frame(&output, &frame, render))
                             .await
@@ -260,6 +352,73 @@ async fn receive(
                 .map_err(|e| anyhow::anyhow!("send OpenDisplay notification: {e:?}"))?;
         }
     }
+}
+
+async fn control_event(
+    event: GattEvent<'_, '_, DefaultPacketPool>,
+    handles: &Controls,
+    session: &mut Session<'_>,
+    actions: &mut Actions<'_>,
+    connection: &GattConnection<'_, '_, DefaultPacketPool>,
+) -> Result<()> {
+    let reply = match event {
+        GattEvent::Read(read) if read.handle() == handles.challenge.handle => {
+            if matches!(
+                read.payload().incoming(),
+                AttClient::Request(AttReq::Read { .. })
+            ) {
+                clear_response(connection, handles)?;
+                let nonce = session.challenge()?;
+                connection
+                    .set(&handles.challenge, &nonce)
+                    .map_err(|error| anyhow::anyhow!("set control nonce: {error:?}"))?;
+                read.accept()
+            } else {
+                read.reject(AttErrorCode::INVALID_OFFSET)
+            }
+        }
+        GattEvent::Read(read) if read.handle() == handles.response.handle => {
+            if session.response().is_some() {
+                read.accept()
+            } else {
+                read.reject(AttErrorCode::INSUFFICIENT_AUTHORISATION)
+            }
+        }
+        GattEvent::Write(write) if write.handle() == handles.request.handle => {
+            let authenticated = write.with_data(|offset, data| {
+                ensure!(offset == 0, "unexpected control write offset");
+                session.authenticate(data)
+            });
+            if let Ok(request) = authenticated {
+                let data = serde_json::to_vec(&actions.perform(&request).await)?;
+                session.respond(&request, &data)?;
+                let response =
+                    Response::from_slice(session.response().context("missing control response")?)
+                        .map_err(|_| anyhow::anyhow!("control response too long"))?;
+                connection
+                    .set(&handles.response, &response)
+                    .map_err(|error| anyhow::anyhow!("set control response: {error:?}"))?;
+                write.accept_unprocessed()
+            } else {
+                write.reject(AttErrorCode::INSUFFICIENT_AUTHORISATION)
+            }
+        }
+        event => event.accept(),
+    };
+    reply
+        .map_err(|error| anyhow::anyhow!("GATT control reply: {error:?}"))?
+        .send()
+        .await;
+    Ok(())
+}
+
+fn clear_response(
+    connection: &GattConnection<'_, '_, DefaultPacketPool>,
+    handles: &Controls,
+) -> Result<()> {
+    connection
+        .set(&handles.response, &Response::new())
+        .map_err(|error| anyhow::anyhow!("clear prior control response: {error:?}"))
 }
 
 fn finish_frame(output: &Path, frame: &[u8], render: bool) -> Result<()> {

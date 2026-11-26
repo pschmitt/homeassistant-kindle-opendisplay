@@ -44,21 +44,23 @@ fn battery_data(path: &Path) -> Vec<u8> {
     data
 }
 
-pub fn packets(name: &str, battery: bool) -> (Vec<u8>, Vec<u8>) {
+pub fn packets(name: &str, battery: bool, display: bool) -> (Vec<u8>, Vec<u8>) {
     let mut data = vec![2, 1, 6];
     let mut scan = vec![(name.len() + 1) as u8, 9];
     scan.extend(name.bytes());
-    if battery {
-        if scan.len() + DISPLAY_UUID.len() <= 31 {
-            scan.extend(DISPLAY_UUID);
+    if display {
+        if battery {
+            if scan.len() + DISPLAY_UUID.len() <= 31 {
+                scan.extend(DISPLAY_UUID);
+            }
+        } else {
+            data.extend(DISPLAY_UUID);
         }
-    } else {
-        data.extend(DISPLAY_UUID);
+        let mut manufacturer = [0; 18];
+        manufacturer[..4].copy_from_slice(&[0x11, 0xff, 0x46, 0x24]);
+        manufacturer[15] = temperature();
+        data.extend(manufacturer);
     }
-    let mut manufacturer = [0; 18];
-    manufacturer[..4].copy_from_slice(&[0x11, 0xff, 0x46, 0x24]);
-    manufacturer[15] = temperature();
-    data.extend(manufacturer);
     if battery {
         data.extend(battery_data(Path::new(BATTERY)));
     }
