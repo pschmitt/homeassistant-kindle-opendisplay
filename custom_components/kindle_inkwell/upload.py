@@ -41,7 +41,7 @@ def setup_upload(hass):
                     await hass.services.async_call(
                         "opendisplay",
                         "upload_image",
-                        call.data,
+                        dict(call.data),
                         blocking=True,
                         context=call.context,
                     )
