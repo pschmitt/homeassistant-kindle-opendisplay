@@ -54,10 +54,10 @@
         "name": "Frontlight"
       },
       "wifi_enabled": {
-        "name": "Wi-Fi enabled"
+        "name": "Wi-Fi"
       },
       "ssh_enabled": {
-        "name": "Wi-Fi SSH"
+        "name": "SSH (Wi-Fi)"
       }
     }
   },

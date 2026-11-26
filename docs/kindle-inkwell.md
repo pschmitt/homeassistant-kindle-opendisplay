@@ -31,7 +31,7 @@ Add **Kindle Inkwell** under **Settings → Devices & services**, or choose
 the Kindle's Bluetooth address and the absolute path to the key file inside
 Core. Use an adapter or an active Bluetooth proxy in range of the Kindle.
 
-The **Wi-Fi enabled** and **Wi-Fi SSH** switches work over BLE even with Wi-Fi
+The **Wi-Fi** and **SSH (Wi-Fi)** switches work over BLE even with Wi-Fi
 turned off. Wi-Fi SSH controls the Inkwell listener on port 2022. USB SSH stays
 available. Turning Wi-Fi back on reconnects to the saved network. This uses Inkwell's association control, while the shared Bluetooth radio stays available. The Wi-Fi
 and SSH preferences persist through the normal Inkwell boot.
