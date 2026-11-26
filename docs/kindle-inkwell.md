@@ -76,15 +76,17 @@ so status polls and control commands wait for the image transfer.
 
 ## Execute a command over BLE
 
-To enable the action on your Kindle, create the opt-in marker as root:
+Enable the action in [the Kindle's settings file](opendisplay-ble.md#device-settings):
 
-```sh
-touch /opt/opendisplay/allow-ble-command
+```toml
+[commands]
+enabled = true
+user = "nobody"
 ```
 
-The receiver checks the marker for each request. Remove it to turn
-execution off. Commands run as `nobody` inside Inkwell. The BLE command
-and result are encrypted with the existing shared key.
+Reload the receiver after changing the settings. Commands run as the
+selected non-root user inside Inkwell. The BLE command and result are
+encrypted with the existing shared key.
 
 Call `kindle_inkwell.execute_command` as a Home Assistant administrator:
 

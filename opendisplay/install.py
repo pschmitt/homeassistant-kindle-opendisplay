@@ -13,6 +13,8 @@ import venv
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from settings import install_settings
+
 SOURCE = Path(__file__).resolve().parent
 TARGET = Path("/opt/opendisplay")
 INIT = Path("/sbin/own-init")
@@ -112,7 +114,13 @@ def install(cpu_latency_us=None):
     with TemporaryDirectory(prefix=".install-", dir=TARGET) as directory:
         stage = Path(directory)
         install_dependencies(stage)
-        for name in ("receiver.py", "kindle_gatt.py", "frontlight", "start"):
+        for name in (
+            "receiver.py",
+            "kindle_gatt.py",
+            "settings.py",
+            "frontlight",
+            "start",
+        ):
             shutil.copy2(SOURCE / name, stage / name)
             (stage / name).replace(TARGET / name)
         active_deps = TARGET / "deps"
@@ -161,8 +169,7 @@ def install(cpu_latency_us=None):
             shutil.copymode(INIT, staged_init)
             subprocess.run(["/bin/sh", "-n", staged_init], check=True)
             staged_init.replace(INIT)
-    if cpu_latency_us is not None:
-        (TARGET / "cpu-latency-us").write_text(f"{cpu_latency_us}\n")
+    install_settings(TARGET, cpu_latency_us)
     (TARGET / "autostart").touch()
     print(
         f"OpenDisplay installed for the next Inkwell boot ({json.loads(config.read_text())['address']})."

@@ -15,6 +15,8 @@ import zlib
 from contextlib import contextmanager, nullcontext
 from pathlib import Path
 
+from settings import DEFAULT_SETTINGS, load_settings
+
 WIDTH, HEIGHT = 1072, 1448
 FRAME_BYTES = (WIDTH // 8) * HEIGHT
 KINDLE_TRANSPORT = "serial:/dev/ttymxc2,115200,rtscts"
@@ -57,10 +59,15 @@ def battery_service_data(battery=BATTERY):
     return bytes((len(data) + 3, 0x16, 0xD2, 0xFC)) + data
 
 
-def advertisements(name, *, announce_battery):
+def advertisements(name, *, announce_battery, opendisplay=True):
     """Fit OpenDisplay and optional BTHome data in legacy BLE packets."""
-    manufacturer = OPENDISPLAY_MANUFACTURER_HEADER + manufacturer_data()
     scan_response = bytes((len(name) + 1, 0x09)) + name
+    if not opendisplay:
+        return (
+            AD_FLAGS + (battery_service_data() if announce_battery else b""),
+            scan_response,
+        )
+    manufacturer = OPENDISPLAY_MANUFACTURER_HEADER + manufacturer_data()
     if announce_battery:
         # Move the UUID list to the scan response so BTHome supports passive scans.
         if len(scan_response) + len(OPENDISPLAY_UUID_LIST) <= 31:
@@ -104,22 +111,8 @@ def render_pw4(frame):
         fcntl.ioctl(framebuffer, 0xC008462F, bytearray(struct.pack("=II", marker, 0)))
 
 
-def cpu_latency_limit(path):
-    """Read an optional per-device idle latency override."""
-    try:
-        value = int(path.read_text().strip())
-        if value in (0, 50):
-            return value
-        raise ValueError("expected 0 or 50")
-    except FileNotFoundError:
-        pass
-    except (OSError, ValueError):
-        LOG.warning("Ignoring invalid CPU latency override in %s", path)
-    return 0
-
-
 @contextmanager
-def kindle_radio():
+def kindle_radio(limit=0):
     """Hold the PW4 UART clock and prepare the controller for cold HCI."""
     driver = Path("/sys/bus/platform/drivers/imx-uart")
     uart = "2034000.serial"
@@ -136,7 +129,6 @@ def kindle_radio():
             )
 
         with open("/dev/cpu_dma_latency", "wb", buffering=0) as latency:
-            limit = cpu_latency_limit(Path(__file__).with_name("cpu-latency-us"))
             latency.write(struct.pack("=i", limit))
             LOG.info("Bluetooth CPU idle latency limit: %d µs", limit)
             clock.write_text("1\n")
@@ -299,7 +291,14 @@ class Receiver:
                 path.unlink(missing_ok=True)
 
 
-async def serve(transport, device_config, output, render=None, control_key=None):
+async def serve(
+    transport,
+    device_config,
+    output,
+    render=None,
+    control_key=None,
+    settings=DEFAULT_SETTINGS,
+):
     from bumble.core import UUID
     from bumble.device import Device
     from bumble.gatt import Characteristic, CharacteristicValue, Service
@@ -336,23 +335,32 @@ async def serve(transport, device_config, output, render=None, control_key=None)
             Characteristic.READABLE | Characteristic.WRITEABLE,
             CharacteristicValue(read=lambda _connection: b"", write=write),
         )
-        device.add_services([Service(uuid, [characteristic])])
-        if control_key is not None:
+        if settings.opendisplay:
+            device.add_services([Service(uuid, [characteristic])])
+        if settings.controls and control_key is not None:
             from kindle_gatt import add_kindle_service
 
-            add_kindle_service(device, control_key)
-        announce_battery = transport == KINDLE_TRANSPORT
+            add_kindle_service(device, control_key, settings=settings)
+        announce_battery = (
+            transport == KINDLE_TRANSPORT and settings.battery_advertising
+        )
         device.advertising_data, device.scan_response_data = advertisements(
-            name, announce_battery=announce_battery
+            name, announce_battery=announce_battery, opendisplay=settings.opendisplay
         )
         await device.power_on()
         await device.start_advertising(auto_restart=True)
-        LOG.info("OpenDisplay BLE advertising started")
+        LOG.info(
+            "Kindle BLE advertising started (OpenDisplay %s)", settings.opendisplay
+        )
         while not hci.source.terminated.done():
             done, _ = await asyncio.wait([hci.source.terminated], timeout=30)
             if done:
                 break
-            data, _ = advertisements(name, announce_battery=announce_battery)
+            data, _ = advertisements(
+                name,
+                announce_battery=announce_battery,
+                opendisplay=settings.opendisplay,
+            )
             if data != device.advertising_data:
                 device.advertising_data = data
                 if device.legacy_advertiser and not device.connections:
@@ -388,11 +396,16 @@ if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
     )
-    radio = kindle_radio if args.transport == "kindle-pw4" else nullcontext
+    settings = load_settings(Path(__file__).resolve().parent)
+    radio = (
+        kindle_radio(settings.cpu_latency_us)
+        if args.transport == "kindle-pw4"
+        else nullcontext()
+    )
     transport = KINDLE_TRANSPORT if args.transport == "kindle-pw4" else args.transport
     signal.signal(signal.SIGTERM, signal.default_int_handler)
     try:
-        with radio():
+        with radio:
             asyncio.run(
                 serve(
                     transport,
@@ -400,6 +413,7 @@ if __name__ == "__main__":
                     args.output,
                     render_pw4 if args.render else None,
                     control_key,
+                    settings,
                 )
             )
     except KeyboardInterrupt:

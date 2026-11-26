@@ -3,30 +3,37 @@
 set -eu
 
 cd /opt/opendisplay
-home_pid=$(pidof -s home)
-case "$home_pid" in
-  ''|*[!0-9]*)
-    printf '%s\n' 'OpenDisplay requires a running Inkwell home process.' >&2
-    exit 1
+case "${1:-}" in
+  --manual) ;;
+  '')
+    boot_status=0
+    python3 settings.py autostart || boot_status=$?
+    case "$boot_status" in
+      0) ;;
+      1) exit 0 ;;
+      *) exit "$boot_status" ;;
+    esac
     ;;
+  *) printf '%s\n' 'Usage: start [--manual]' >&2; exit 2 ;;
 esac
 
 mode_lock=/run/opendisplay-mode.lock
 mkdir "$mode_lock" || exit 1
 
+home_pid=
 resume_home() {
-  if [ -r "/proc/$home_pid/comm" ] && [ "$(cat "/proc/$home_pid/comm")" = home ]
+  if [ -n "$home_pid" ] && [ -r "/proc/$home_pid/comm" ] && [ "$(cat "/proc/$home_pid/comm")" = home ]
   then
     kill -CONT "$home_pid"
   fi
-  rmdir "$mode_lock"
+  home_pid=
 }
 
-kill -STOP "$home_pid" || {
+release_display() {
+  resume_home
   rmdir "$mode_lock"
-  exit 1
 }
-trap resume_home EXIT
+trap release_display EXIT
 
 child=
 reload=0
@@ -46,6 +53,22 @@ export PYTHONDONTWRITEBYTECODE=1
 
 while :
 do
+  display_status=0
+  python3 settings.py opendisplay || display_status=$?
+  case "$display_status" in
+    0)
+      if [ -z "$home_pid" ]
+      then
+        home_pid=$(pidof -s home) || {
+          printf '%s\n' 'OpenDisplay requires a running Inkwell home process.' >&2
+          exit 1
+        }
+        kill -STOP "$home_pid"
+      fi
+      ;;
+    1) resume_home ;;
+    *) exit "$display_status" ;;
+  esac
   python3 receiver.py kindle-pw4 device.json frame.bin --render &
   child=$!
   if [ "$stop" -eq 1 ] || [ "$reload" -eq 1 ]

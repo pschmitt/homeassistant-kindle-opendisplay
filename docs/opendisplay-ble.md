@@ -25,6 +25,41 @@ on upgrades. It reports the address for the
 [Home Assistant integration](kindle-inkwell.md). Start the launcher from
 an Inkwell shell or reboot into Inkwell when ready to activate the display.
 
+## Device settings
+
+Edit `/opt/opendisplay/config.toml` on the Kindle:
+
+```toml
+autostart = true
+controls = true
+opendisplay = true
+battery_advertising = true
+cpu_latency_us = 0
+
+[commands]
+enabled = false
+user = "nobody"
+```
+
+- `autostart` starts the receiver on an Inkwell boot. Use
+  `/opt/opendisplay/start --manual` for a foreground session when off.
+- `controls` enables authenticated Kindle controls. Command execution also
+  requires controls.
+- `opendisplay` enables OpenDisplay discovery, image uploads, and panel
+  ownership. Turn it off to return the panel to Inkwell Home while keeping
+  the optional battery broadcast and authenticated Kindle controls.
+- `battery_advertising` enables passive BTHome battery and charging data.
+- `cpu_latency_us` accepts `0` or `50`. See the suspend notes below.
+- `commands` enables the BLE command action and selects a local non-root
+  Unix account. The account's primary group must also be non-root.
+
+Reload the launcher with SIGHUP after editing the file. The installer
+migrates the old `cpu-latency-us` and `allow-ble-command` files when
+creating TOML. Once TOML exists it takes precedence. Upgrades preserve it
+unless you supply an explicit idle limit. The installer keeps the legacy boot marker for older Inkwell boot hooks.
+The TOML setting has the final say. The Bluetooth identity and private
+BLE key stay in their own files.
+
 ## Controller bring-up
 
 The Lab126 4.1.15 kernel exposes /dev/ttymxc2 but has no attached HCI adapter under Inkwell. Bumble drives the controller over raw H4 UART. The successful initialization sequence keeps the SoC out of deep idle with /dev/cpu_dma_latency, enables the UART clock using /proc/bluetooth/sleep/uart_clk, rebinds only the Bluetooth UART (2034000.serial), enables Bluetooth through bt_pwr_ctrl, and asserts the active-low btwake line. The controller answers HCI Reset at 115200 baud with RTS/CTS. Its cold firmware accepts legacy connectable BLE advertising, so this path needs no Broadcom firmware download.
@@ -73,7 +108,7 @@ Opt in to the tested 50 μs setting during installation:
 python3 install.py --cpu-latency-us 50
 ```
 
-On an installed Kindle, set `/opt/opendisplay/cpu-latency-us` to `50`.
+On an installed Kindle, set `cpu_latency_us = 50` in `config.toml`.
 The receiver reads it on its next launch. The installer preserves the file
 on upgrades unless given an explicit value. Set it to `0` to restore the
 default.

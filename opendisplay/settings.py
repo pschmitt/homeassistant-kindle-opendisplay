@@ -1,0 +1,127 @@
+"""Device-local OpenDisplay configuration."""
+
+import argparse
+import json
+import pwd
+import sys
+import tomllib
+from dataclasses import dataclass
+from pathlib import Path
+from tempfile import NamedTemporaryFile
+
+CONFIG_NAME = "config.toml"
+
+
+@dataclass(frozen=True)
+class Settings:
+    opendisplay: bool = True
+    battery_advertising: bool = True
+    cpu_latency_us: int = 0
+    commands_enabled: bool = False
+    command_user: str = "nobody"
+    autostart: bool = True
+    controls: bool = True
+
+
+DEFAULT_SETTINGS = Settings()
+
+
+def load_settings(directory):
+    """Load TOML, with legacy files as a fallback for unconverted installations."""
+    path = directory / CONFIG_NAME
+    try:
+        config = tomllib.loads(path.read_text())
+    except FileNotFoundError:
+        try:
+            latency = int((directory / "cpu-latency-us").read_text())
+        except (OSError, ValueError):
+            latency = 0
+        return Settings(
+            cpu_latency_us=latency if latency in (0, 50) else 0,
+            commands_enabled=(directory / "allow-ble-command").is_file(),
+        )
+
+    if config.keys() - {
+        "autostart",
+        "controls",
+        "opendisplay",
+        "battery_advertising",
+        "cpu_latency_us",
+        "commands",
+    }:
+        raise ValueError("Unknown OpenDisplay settings")
+    commands = config.get("commands", {})
+    if not isinstance(commands, dict) or commands.keys() - {"enabled", "user"}:
+        raise ValueError("Expected a commands table with enabled and user settings")
+    autostart = config.get("autostart", True)
+    controls = config.get("controls", True)
+    display = config.get("opendisplay", True)
+    battery = config.get("battery_advertising", True)
+    enabled = commands.get("enabled", False)
+    latency = config.get("cpu_latency_us", 0)
+    user = commands.get("user", "nobody")
+    if any(
+        type(value) is not bool
+        for value in (autostart, controls, display, battery, enabled)
+    ):
+        raise ValueError("OpenDisplay feature settings must be true or false")
+    if type(latency) is not int or latency not in (0, 50):
+        raise ValueError("cpu_latency_us must be 0 or 50")
+    if not isinstance(user, str) or not user:
+        raise ValueError("commands.user must be a local username")
+    if enabled:
+        try:
+            account = pwd.getpwnam(user)
+        except KeyError as err:
+            raise ValueError("commands.user does not exist on the Kindle") from err
+        if account.pw_uid == 0 or account.pw_gid == 0:
+            raise ValueError("BLE commands require a non-root user and group")
+    return Settings(
+        opendisplay=display,
+        battery_advertising=battery,
+        cpu_latency_us=latency,
+        commands_enabled=enabled,
+        command_user=user,
+        autostart=autostart,
+        controls=controls,
+    )
+
+
+def install_settings(directory, latency=None):
+    """Migrate old settings, preserving an existing TOML file on upgrades."""
+    path = directory / CONFIG_NAME
+    current = load_settings(directory)
+    if path.exists() and latency is None:
+        return
+    idle_limit = current.cpu_latency_us if latency is None else latency
+    text = (
+        "# Reload the receiver after editing this file.\n"
+        f"autostart = {str(current.autostart).lower()}\n"
+        f"controls = {str(current.controls).lower()}\n"
+        f"opendisplay = {str(current.opendisplay).lower()}\n"
+        f"battery_advertising = {str(current.battery_advertising).lower()}\n"
+        f"cpu_latency_us = {idle_limit}\n\n"
+        "[commands]\n"
+        f"enabled = {str(current.commands_enabled).lower()}\n"
+        f"user = {json.dumps(current.command_user)}\n"
+    )
+    with NamedTemporaryFile("w", dir=directory, delete=False) as file:
+        staged = Path(file.name)
+        try:
+            file.write(text)
+            file.close()
+            staged.replace(path)
+        finally:
+            staged.unlink(missing_ok=True)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("feature", choices=("autostart", "opendisplay"))
+    args = parser.parse_args()
+    try:
+        enabled = getattr(load_settings(Path(__file__).resolve().parent), args.feature)
+    except (OSError, ValueError) as err:
+        print(f"Invalid OpenDisplay configuration: {err}", file=sys.stderr)
+        sys.exit(2)
+    sys.exit(0 if enabled else 1)

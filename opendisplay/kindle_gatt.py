@@ -18,12 +18,12 @@ from bumble.core import UUID
 from bumble.gatt import Characteristic, CharacteristicValue, Service
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from settings import DEFAULT_SETTINGS
 
 ROOT = Path("/mnt/us/linux")
 UUIDS = [UUID(f"884cc76{index}-ea3a-4b7b-a8bd-114c4e5342ae") for index in range(4)]
 CONTEXT = b"kindle-control-v1\0"
 LOG = logging.getLogger(__name__)
-COMMAND_ENABLED = Path("/opt/opendisplay/allow-ble-command")
 COMMAND_OPCODE = 0x89
 MAX_COMMAND = 160
 MAX_STREAM = 128
@@ -138,9 +138,11 @@ async def _read_output(stream, buffer):
         buffer.extend(chunk[: MAX_STREAM + 1 - len(buffer)])
 
 
-async def run_shell(command_text):
+async def run_shell(command_text, user):
     """Run a short command without receiver privileges."""
-    account = pwd.getpwnam("nobody")
+    account = pwd.getpwnam(user)
+    if account.pw_uid == 0 or account.pw_gid == 0:
+        raise ValueError("BLE commands require an unprivileged account")
     process = await asyncio.create_subprocess_exec(
         "/bin/sh",
         "-c",
@@ -149,7 +151,7 @@ async def run_shell(command_text):
         group=account.pw_gid,
         extra_groups=[],
         cwd="/tmp",
-        env={"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "HOME": "/tmp"},
+        env={"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "HOME": account.pw_dir},
         stdin=asyncio.subprocess.DEVNULL,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -179,7 +181,7 @@ async def run_shell(command_text):
     }
 
 
-def add_kindle_service(device, key):
+def add_kindle_service(device, key, *, settings=DEFAULT_SETTINGS):
     """Install the optional shared-key service on a Bumble peripheral."""
     if len(key) != 32:
         raise ValueError("Kindle BLE key must be 32 bytes")
@@ -214,7 +216,7 @@ def add_kindle_service(device, key):
                 ).decode()
             except (InvalidTag, UnicodeDecodeError) as err:
                 raise ATT_Error(ATT_INSUFFICIENT_AUTHORIZATION_ERROR) from err
-            if not COMMAND_ENABLED.is_file():
+            if not settings.commands_enabled:
                 result = {"error": "disabled"}
             elif not command_text.strip() or "\0" in command_text:
                 result = {"error": "invalid"}
@@ -223,8 +225,8 @@ def add_kindle_service(device, key):
             else:
                 async with command_lock:
                     try:
-                        result = await run_shell(command_text)
-                    except (OSError, KeyError):
+                        result = await run_shell(command_text, settings.command_user)
+                    except (OSError, KeyError, ValueError):
                         LOG.error("The Kindle BLE command could not be started")
                         result = {"error": "start_failed"}
             if connection in device.connections.values():
