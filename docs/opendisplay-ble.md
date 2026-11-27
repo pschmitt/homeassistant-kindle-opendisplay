@@ -139,6 +139,14 @@ an on-device RTC alarm, an HA upload during the awake window, and verified
 network recovery after wake. The e-ink panel can hold the last frame
 between updates.
 
+A later Paperwhite 4 test entered `mem` with a 45-second alarm on the
+wake-enabled SNVS RTC (`rtc1`). It resumed on the same boot after 44.47
+seconds of kernel-accounted suspend. USB SSH came back. The Wi-Fi driver
+reassociated but needed a fresh DHCP client to regain IPv4. The Bluetooth
+receiver exited with HCI `Command Disallowed` and advertising resumed
+after restarting the receiver. Scheduled suspend therefore needs explicit
+recovery of DHCP and BLE before it can serve an unattended display.
+
 ## BTHome advertisements
 
 On the Paperwhite 4, the receiver includes BTHome v2 battery percentage and
