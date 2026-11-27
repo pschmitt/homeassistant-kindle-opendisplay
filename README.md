@@ -10,7 +10,8 @@
 - **Kindle Inkwell** adds battery diagnostics, frontlight controls, Wi-Fi
   and SSH switches, and buttons to select the next boot system.
 - **Timed sleep** can save power on battery and bring Wi-Fi and BLE back
-  on wake.
+  on wake. The bundled Inkwell image skips its own idle sleep when
+  OpenDisplay is set to start at boot.
 
 ## Install
 

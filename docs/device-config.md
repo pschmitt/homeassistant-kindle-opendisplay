@@ -27,7 +27,7 @@ user = "nobody"
 
 | Key | Default | Accepted values and effect |
 | --- | --- | --- |
-| `autostart` | `true` | Boolean. Start the receiver at Inkwell boot. The launcher can still run manually. |
+| `autostart` | `true` | Boolean. Start the receiver at Inkwell boot. With `opendisplay` enabled, also inhibit idle sleep in the patched Inkwell UI. The launcher can still run manually. |
 | `opendisplay` | `true` | Boolean. Advertise OpenDisplay, accept images, and own the panel. Set to `false` for Inkwell Home with the other enabled BLE services. |
 | `controls` | `true` | Boolean. Serve authenticated controls and active telemetry over BLE. Command execution also requires this. |
 | `frontlight_double_tap` | `true` | Boolean. While OpenDisplay owns the panel and the Kindle is awake, double-tap the touchscreen to set the frontlight to 50% for 20 seconds. It then restores the previous level. A manual brightness change cancels the boost. |

@@ -55,6 +55,11 @@ For a five-minute idle and five-minute sleep cycle, set both sleep values
 to `300`. The **Prevent sleep** HA switch and the default external-power
 policy defer suspend. An active BLE connection also defers it.
 
+The bundled Inkwell image skips its idle sleep when OpenDisplay is set
+to start at boot, including when boot falls back to Inkwell Home after
+the launcher exits. Inkwell's physical power button can still invoke
+manual sleep when its UI is running.
+
 The last e-ink frame stays visible during suspend. The receiver closes BLE
 before suspending. The Rust supervisor wakes on the SNVS RTC, repairs
 DHCP if needed, and starts BLE again. USB and Wi-Fi SSH and BLE controls need the Kindle awake.

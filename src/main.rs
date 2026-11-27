@@ -190,8 +190,12 @@ async fn main() -> Result<()> {
         return sleep::supervise().await;
     }
     if args.peek().is_some_and(|arg| arg == "--idle-inhibited") {
-        let settings = Settings::load(Path::new("/opt/opendisplay"))?;
+        let directory = Path::new(setup::DIRECTORY);
+        let settings = Settings::load(directory)?;
+        let opendisplay_at_boot =
+            settings.autostart && settings.opendisplay && directory.join("autostart").is_file();
         let inhibited = Path::new(settings::PREVENT_SLEEP).is_file()
+            || opendisplay_at_boot
             || (settings.stay_awake_on_external_power
                 && advertising::external_power() == Some(true));
         std::process::exit(if inhibited { 0 } else { 1 });
