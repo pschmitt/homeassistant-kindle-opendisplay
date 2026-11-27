@@ -9,6 +9,7 @@ import mmap
 import os
 import signal
 import struct
+import sys
 import tempfile
 import time
 import zlib
@@ -386,7 +387,20 @@ if __name__ == "__main__":
     parser.add_argument(
         "--control-key-file", type=Path, help="File containing a 32-byte hex BLE key"
     )
+    parser.add_argument(
+        "--python",
+        action="store_true",
+        help="Use the reference receiver even when a native receiver is installed",
+    )
     args = parser.parse_args()
+    native = Path(__file__).resolve().with_name("kindle-opendisplay")
+    if (
+        args.transport == "kindle-pw4"
+        and not args.python
+        and os.access(native, os.X_OK)
+    ):
+        # A launcher from before the native port still enters here after SIGHUP.
+        os.execv(native, [str(native), *sys.argv[1:]])
     key_file = args.control_key_file or Path(__file__).with_name("control.key")
     control_key = (
         bytes.fromhex(key_file.read_text())

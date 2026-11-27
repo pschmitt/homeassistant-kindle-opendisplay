@@ -21,6 +21,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from settings import DEFAULT_SETTINGS
 
 ROOT = Path("/mnt/us/linux")
+PREVENT_SLEEP = Path("/opt/opendisplay/prevent-sleep")
 UUIDS = [UUID(f"884cc76{index}-ea3a-4b7b-a8bd-114c4e5342ae") for index in range(4)]
 CONTEXT = b"kindle-control-v1\0"
 LOG = logging.getLogger(__name__)
@@ -88,6 +89,7 @@ async def telemetry():
         device.get("bssid") if wifi_enabled else None,
         device.get("ip_address") if wifi_enabled else None,
         plugged_in(),
+        PREVENT_SLEEP.is_file(),
     ]
 
 
@@ -116,6 +118,11 @@ async def perform(opcode):
             marker.touch()
         else:
             marker.unlink(missing_ok=True)
+    elif opcode in (10, 11):
+        if opcode == 11:
+            PREVENT_SLEEP.touch()
+        else:
+            PREVENT_SLEEP.unlink(missing_ok=True)
     elif opcode != 0:
         raise ValueError("Unknown Kindle command")
     return await telemetry()
@@ -253,8 +260,11 @@ def add_kindle_service(device, key, *, settings=DEFAULT_SETTINGS):
         encrypted = bool(packet[0] & 0x80)
         extended = encrypted and bool(packet[0] & 0x40)
         power = extended and bool(packet[0] & 0x20)
+        diagnostic = power and bool(packet[0] & 0x10)
         try:
-            opcode = packet[0] & (0x1F if extended else 0x7F)
+            opcode = packet[0] & (0x0F if diagnostic else 0x1F if extended else 0x7F)
+            if opcode in (10, 11) and not diagnostic:
+                raise ValueError("Missing the diagnostic protocol version")
             if opcode in (7, 8):
                 if not packet[0] & 0x80 or not (ROOT / "BOOT_OWN").is_file():
                     raise ValueError("Inkwell boot selection is unavailable")
@@ -270,7 +280,17 @@ def add_kindle_service(device, key, *, settings=DEFAULT_SETTINGS):
         # Older clients expect a fixed number of fields. Network identifiers
         # are available only on encrypted responses.
         if state is not None:
-            count = 17 if power else 16 if extended else 15 if encrypted else 13
+            count = (
+                18
+                if diagnostic
+                else 17
+                if power
+                else 16
+                if extended
+                else 15
+                if encrypted
+                else 13
+            )
             state = state[:count]
         data = json.dumps(state, separators=(",", ":")).encode()
         if encrypted:

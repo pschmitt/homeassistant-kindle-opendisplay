@@ -2,6 +2,8 @@ use anyhow::{Context, Result, ensure};
 use serde::Deserialize;
 use std::{fs, path::Path};
 
+pub const PREVENT_SLEEP: &str = "/opt/opendisplay/prevent-sleep";
+
 #[derive(Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {

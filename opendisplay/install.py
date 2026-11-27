@@ -139,6 +139,7 @@ def install(cpu_latency_us=None, receiver_binary=None):
             "kindle_gatt.py",
             "settings.py",
             "provision.py",
+            "launch.py",
             "frontlight",
             "start",
         ):

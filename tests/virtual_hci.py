@@ -161,7 +161,7 @@ async def authenticated_control(peer):
         assert result == {"error": "disabled"}
     await expect_denied(peer.write_value(request, packet, with_response=True))
 
-    for operation in (b"\xc0", b"\xe0"):
+    for operation in (b"\xc0", b"\xe0", b"\xf0"):
         nonce = await peer.read_value(challenge)
         header = CONTEXT + nonce + operation
         packet = operation + hmac.digest(KEY, b"request\0" + header, "sha256")[:16]

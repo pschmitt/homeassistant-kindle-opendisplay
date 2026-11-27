@@ -71,7 +71,7 @@ pkgs.stdenvNoCC.mkDerivation {
     mkdir -p src/rootfs/opt/opendisplay
     install -m 0755 ${receiver}/bin/kindle-opendisplay src/rootfs/opt/opendisplay/
     install -m 0755 ${overlay}/start ${overlay}/frontlight src/rootfs/opt/opendisplay/
-    install -m 0644 ${overlay}/settings.py ${overlay}/provision.py src/rootfs/opt/opendisplay/
+    install -m 0644 ${overlay}/settings.py ${overlay}/provision.py ${overlay}/launch.py src/rootfs/opt/opendisplay/
     touch src/rootfs/opt/opendisplay/autostart
   '';
 

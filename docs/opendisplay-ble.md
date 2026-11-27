@@ -28,7 +28,10 @@ an Inkwell shell or reboot into Inkwell when ready to activate the display.
 For the Rust receiver, build the ARMv7 binary with `nix build '.#kindle-armv7'`
 and copy it to the Kindle. Pass `--receiver-binary PATH` to the post-installer
 to install it. The launcher selects the installed native binary and retains
-the Python receiver and dependencies from an earlier installation. A full
+the Python receiver and dependencies from an earlier installation. Reload
+the running launcher with `kill -HUP "$(cat /run/opendisplay.pid)"` to switch
+without releasing the Home process. To return to Python, move the binary
+out of `/opt/opendisplay` and use the same reload. A full
 [Inkwell image](inkwell-image.md) includes the Rust receiver.
 
 ## Device settings
@@ -95,7 +98,7 @@ Run the receiver on the Kindle as root from its installation directory:
 
 ```sh
 PYTHONPATH="$PWD/deps:$PWD/deps/usr/lib/python3.14/site-packages" \
-  python3 receiver.py kindle-pw4 device.json "$PWD/frame.bin"
+  python3 receiver.py --python kindle-pw4 device.json "$PWD/frame.bin"
 ```
 
 The output is a 194,032-byte packed monochrome frame. The command above saves frames without refreshing the screen. Add `--render` to refresh the panel, or use the launcher described below. BLE commands are plaintext. Partial refresh and pairing are outside the current scope.

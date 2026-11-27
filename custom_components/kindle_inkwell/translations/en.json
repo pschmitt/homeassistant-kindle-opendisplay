@@ -67,6 +67,9 @@
       },
       "ssh_enabled": {
         "name": "SSH (Wi-Fi)"
+      },
+      "prevent_sleep": {
+        "name": "Prevent sleep"
       }
     },
     "button": {

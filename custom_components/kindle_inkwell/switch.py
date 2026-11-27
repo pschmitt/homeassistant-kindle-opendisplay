@@ -1,6 +1,7 @@
 """Kindle frontlight, Wi-Fi and Wi-Fi SSH switches."""
 
 from homeassistant.components.switch import SwitchEntity
+from homeassistant.const import EntityCategory
 from homeassistant.exceptions import HomeAssistantError
 
 from .api import KindleError
@@ -11,7 +12,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     """Add the switches supported by the configured transport."""
     coordinator = entry.runtime_data
     keys = (
-        ("frontlight", "wifi_enabled", "ssh_enabled")
+        ("frontlight", "wifi_enabled", "ssh_enabled", "prevent_sleep")
         if coordinator.ble
         else ("frontlight",)
     )
@@ -25,6 +26,15 @@ class KindleSwitch(KindleEntity, SwitchEntity):
         """Record the control's state field."""
         super().__init__(coordinator, key)
         self.key = key
+        if key == "prevent_sleep":
+            self._attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def available(self):
+        """Report the sleep switch only when the receiver supports it."""
+        return super().available and (
+            self.key != "prevent_sleep" or self.is_on is not None
+        )
 
     @property
     def is_on(self):

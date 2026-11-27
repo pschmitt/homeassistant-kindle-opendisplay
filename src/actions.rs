@@ -2,7 +2,7 @@
 
 use crate::{
     control::{Authenticated, Request},
-    settings::Commands,
+    settings::{Commands, PREVENT_SLEEP},
 };
 use anyhow::{Context, Result, ensure};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
@@ -102,6 +102,13 @@ impl<'a> Actions<'a> {
                     "reboot already scheduled"
                 );
             }
+            10 | 11 => {
+                ensure!(
+                    request.telemetry_fields() == 18,
+                    "missing diagnostic protocol version"
+                );
+                set_file(Path::new(PREVENT_SLEEP), opcode == 11)?;
+            }
             _ => anyhow::bail!("unknown Kindle control"),
         }
         let mut state = telemetry().await?;
@@ -118,7 +125,10 @@ impl<'a> Actions<'a> {
 }
 
 fn set_marker(name: &str, present: bool) -> io::Result<()> {
-    let path = Path::new(ROOT).join(name);
+    set_file(&Path::new(ROOT).join(name), present)
+}
+
+fn set_file(path: &Path, present: bool) -> io::Result<()> {
     if present {
         File::options()
             .create(true)
@@ -258,6 +268,7 @@ async fn telemetry() -> Result<Vec<Value>> {
         json!(connected.then(|| status.get("bssid")).flatten()),
         json!(connected.then_some(ip).flatten()),
         json!(crate::advertising::external_power()),
+        json!(Path::new(PREVENT_SLEEP).is_file()),
     ])
 }
 

@@ -3,6 +3,12 @@
 set -eu
 
 cd /opt/opendisplay
+if [ "${OPENDISPLAY_SIGNALS_READY:-}" != 1 ]
+then
+  exec python3 launch.py "$@"
+fi
+unset OPENDISPLAY_SIGNALS_READY
+
 case "${1:-}" in
   --manual) ;;
   '')

@@ -54,6 +54,14 @@ The standalone Home Assistant BTHome entry is optional and creates an
 additional device record. If you previously added it, remove that entry
 and ignore its rediscovery to keep a single pair of battery entities.
 
+## Prevent automatic sleep
+
+**Prevent sleep** is a diagnostic switch. The patched Inkwell image skips
+automatic idle sleep while the switch is on, including on battery. Turning
+the switch off restores the configured idle policy. By default the image
+already skips idle sleep on USB or a charger. A manual power-button press
+still works normally. The override persists across receiver restarts.
+
 ## Reboot
 
 The **Reboot into Inkwell** button restarts the device into Inkwell.

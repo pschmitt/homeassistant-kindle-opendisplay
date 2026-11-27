@@ -22,6 +22,8 @@ and SSH configuration using the upstream instructions. Device keys,
 addresses, and user configuration belong on the Kindle. On external power,
 the image skips automatic idle sleep by default. Edit
 `stay_awake_on_external_power` in `/opt/opendisplay/config.toml` to change it.
+The **Prevent sleep** diagnostic switch also inhibits automatic idle sleep
+on battery.
 
 For an existing installation, build just the receiver with
 `nix build '.#kindle-armv7'`. Copy the binary to the device and use
