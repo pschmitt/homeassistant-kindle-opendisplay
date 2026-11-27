@@ -6,6 +6,7 @@ mod launcher;
 mod settings;
 mod setup;
 mod sleep;
+mod update;
 
 use actions::Actions;
 use anyhow::{Context, Result, bail, ensure};
@@ -176,7 +177,7 @@ async fn main() -> Result<()> {
         _ => {}
     }
     if args.peek().is_some_and(|arg| arg == "--version") {
-        println!("kindle-opendisplay {}", env!("CARGO_PKG_VERSION"));
+        println!("kindle-opendisplay {}", update::VERSION);
         return Ok(());
     }
     if args.peek().is_some_and(|arg| arg == "--supervisor-version") {

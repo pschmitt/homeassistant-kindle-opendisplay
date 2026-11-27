@@ -98,6 +98,7 @@ ID normally includes the Kindle's device name.
 | Event | **Event** | New `wake` event after HA observes a recorded timed-suspend resume. Attributes give the device's wake time and suspended seconds. |
 | Button | **Reboot into Inkwell** | Restart into Inkwell over BLE. |
 | Button | **Reboot into Kindle OS** | Boot Amazon's OS once over BLE. Its next normal reboot returns to Inkwell if the boot hook is enabled. |
+| Update | **OpenDisplay receiver** | Install a newer stable OpenDisplay release when the Kindle is on external power and Wi-Fi. |
 
 Use the v0.8.0 receiver or later for the extended battery and CPU readings,
 uptime, sleep history, wake event, and brightness slider. To upgrade an
@@ -109,6 +110,22 @@ BLE controls require an awake Kindle. The wake event is based on the
 scheduler's resume record. A gap in BLE contact can occur during suspend,
 loss of range, or power-off. See [Device configuration](device-config.md)
 for the sleep and external-power settings.
+
+## Update the receiver
+
+Install v0.9.0 once using the [Kindle setup guide](opendisplay-ble.md#install-on-the-kindle)
+to enable updates. The **OpenDisplay receiver** update entity compares the
+installed version over authenticated BLE with stable GitHub releases.
+
+Connect the Kindle to power and Wi-Fi before pressing **Install**. The
+Kindle downloads the ARMv7 binary over HTTPS and verifies the release
+checksum. BLE and display uploads briefly pause while the receiver
+restarts. Home Assistant confirms the new version after reconnecting.
+If confirmation fails within three minutes, the Kindle restores the
+previous binary. The update preserves the device identity, key, and TOML
+settings. Kindle OS, Inkwell, and the Home Assistant integration have
+their own update paths. The running launcher adopts launcher changes
+the next time Inkwell restarts.
 
 ## Send an image
 

@@ -17,12 +17,18 @@ use subtle::ConstantTimeEq as _;
 const CONTEXT: &[u8] = b"kindle-control-v1\0";
 const FRONTLIGHT_LEVEL: u8 = 0xbc;
 const COMMAND: u8 = 0x89;
+const UPDATE_STATUS: u8 = 0x9c;
+const UPDATE_START: u8 = 0x9d;
+const UPDATE_CONFIRM: u8 = 0x9e;
 const MAX_COMMAND: usize = 160;
 
 pub enum Request {
     Control(u8),
     FrontlightLevel(u16),
     Command(String),
+    UpdateStatus,
+    StartUpdate { version: String, digest: [u8; 32] },
+    ConfirmUpdate(String),
 }
 
 pub struct Session<'a> {
@@ -104,6 +110,28 @@ impl<'a> Session<'a> {
                 )
                 .map_err(|_| anyhow::anyhow!("invalid command authentication"))?;
             Request::Command(String::from_utf8(clear)?)
+        } else if matches!(opcode, UPDATE_STATUS | UPDATE_START | UPDATE_CONFIRM) {
+            ensure!(data.len() >= 16, "missing update authentication");
+            let (payload, tag) = data.split_at(data.len() - 16);
+            let expected = mac(self.key, &[b"request\0", &header, payload]);
+            ensure!(
+                bool::from(tag.ct_eq(&expected[..16])),
+                "invalid update authentication"
+            );
+            match opcode {
+                UPDATE_STATUS if payload.is_empty() => Request::UpdateStatus,
+                UPDATE_START if (37..=64).contains(&payload.len()) => {
+                    let (digest, version) = payload.split_at(32);
+                    Request::StartUpdate {
+                        version: std::str::from_utf8(version)?.to_owned(),
+                        digest: digest.try_into()?,
+                    }
+                }
+                UPDATE_CONFIRM if (5..=32).contains(&payload.len()) => {
+                    Request::ConfirmUpdate(std::str::from_utf8(payload)?.to_owned())
+                }
+                _ => anyhow::bail!("invalid update payload"),
+            }
         } else if opcode == FRONTLIGHT_LEVEL {
             let [high, low, tag @ ..] = data else {
                 anyhow::bail!("missing frontlight level");
@@ -193,6 +221,33 @@ mod tests {
                 assert!(matches!(
                     authenticated.request,
                     Request::FrontlightLevel(1024)
+                ));
+                assert!(session.authenticate(&packet).is_err());
+            }
+        }
+        Ok(())
+    }
+    #[test]
+    fn update_authentication_covers_version_and_digest() -> Result<()> {
+        let key = [0x23; 32];
+        let mut session = Session::new(&key);
+        let payload = [&[0x46u8; 32][..], b"0.9.1"].concat();
+        for altered in [None, Some(1), Some(37)] {
+            let nonce = session.challenge()?;
+            let tag = mac(
+                &key,
+                &[b"request\0", CONTEXT, &nonce, &[UPDATE_START], &payload],
+            );
+            let mut packet = [&[UPDATE_START][..], &payload, &tag[..16]].concat();
+            if let Some(index) = altered {
+                packet[index] ^= 1;
+                assert!(session.authenticate(&packet).is_err());
+            } else {
+                let request = session.authenticate(&packet)?;
+                assert!(matches!(
+                    request.request,
+                    Request::StartUpdate { version, digest }
+                        if version == "0.9.1" && digest == [0x46; 32]
                 ));
                 assert!(session.authenticate(&packet).is_err());
             }

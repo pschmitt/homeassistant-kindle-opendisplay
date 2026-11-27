@@ -15,6 +15,7 @@ PLATFORMS = (
     Platform.EVENT,
     Platform.SELECT,
     Platform.IMAGE,
+    Platform.UPDATE,
 )
 
 

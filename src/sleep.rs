@@ -153,7 +153,8 @@ fn frame_stamp() -> io::Result<Option<SystemTime>> {
 }
 
 fn sleep_allowed(keep_awake_on_power: bool) -> bool {
-    !Path::new(crate::settings::PREVENT_SLEEP).exists()
+    !crate::update::inhibits_sleep()
+        && !Path::new(crate::settings::PREVENT_SLEEP).exists()
         && (!keep_awake_on_power || advertising::external_power() == Some(false))
 }
 

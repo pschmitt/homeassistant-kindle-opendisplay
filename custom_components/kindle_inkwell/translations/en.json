@@ -33,6 +33,11 @@
     }
   },
   "entity": {
+    "update": {
+      "receiver_update": {
+        "name": "OpenDisplay receiver"
+      }
+    },
     "binary_sensor": {
       "charging": {
         "name": "Charging"

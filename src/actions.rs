@@ -4,6 +4,8 @@ use crate::{
     control::{Authenticated, Request},
     frontlight,
     settings::{Commands, PREVENT_SLEEP},
+    setup::DIRECTORY,
+    update,
 };
 use anyhow::{Context, Result, ensure};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
@@ -34,6 +36,8 @@ pub struct Actions<'a> {
     commands: &'a Commands,
     paperwhite: bool,
     reboot: Option<JoinHandle<()>>,
+    update_job: Option<JoinHandle<Result<()>>>,
+    update_failed: bool,
 }
 
 impl<'a> Actions<'a> {
@@ -42,6 +46,8 @@ impl<'a> Actions<'a> {
             commands,
             paperwhite,
             reboot: None,
+            update_job: None,
+            update_failed: false,
         }
     }
 
@@ -61,6 +67,36 @@ impl<'a> Actions<'a> {
                     Value::Null
                 }
             },
+            Request::UpdateStatus => self.update_status().await,
+            Request::StartUpdate { version, digest } => {
+                if !self.paperwhite {
+                    return json!({"error": "unsupported"});
+                }
+                if self
+                    .update_job
+                    .as_ref()
+                    .is_some_and(|task| !task.is_finished())
+                {
+                    return json!({"error": "busy"});
+                }
+                if let Err(error) = update::check_request(version) {
+                    return json!({"error": error.to_string()});
+                }
+                let version = version.to_owned();
+                let digest = *digest;
+                self.update_failed = false;
+                self.update_job = Some(tokio::spawn(async move {
+                    update::fetch(&version, &digest).await
+                }));
+                json!({"accepted": true})
+            }
+            Request::ConfirmUpdate(version) => {
+                if self.paperwhite && update::confirm(version).is_ok() {
+                    json!({"confirmed": true})
+                } else {
+                    json!({"error": "unexpected running version"})
+                }
+            }
             Request::Command(text) => {
                 if !self.commands.enabled {
                     json!({"error": "disabled"})
@@ -74,6 +110,27 @@ impl<'a> Actions<'a> {
                 }
             }
         }
+    }
+
+    async fn update_status(&mut self) -> Value {
+        if !self.paperwhite {
+            return Value::Null;
+        }
+        if self
+            .update_job
+            .as_ref()
+            .is_some_and(|task| task.is_finished())
+            && let Some(task) = self.update_job.take()
+        {
+            self.update_failed = !matches!(task.await, Ok(Ok(())));
+        }
+        let directory = Path::new(DIRECTORY);
+        json!({
+            "version": update::VERSION,
+            "trial": update::pending(directory),
+            "busy": update::ready(directory) || self.update_job.is_some(),
+            "failed": self.update_failed,
+        })
     }
 
     fn set_frontlight(&self, level: u16) -> Result<u16> {

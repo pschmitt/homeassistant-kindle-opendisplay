@@ -269,7 +269,14 @@ class KindleBleClient:
         async with self.lock:
             return await self._exchange(9, command=payload)
 
-    async def _exchange(self, opcode, *, flags=0x80, command=None, level=None):
+    async def receiver_update(self, operation, payload=b""):
+        """Exchange a dedicated receiver update request."""
+        async with self.lock:
+            return await self._exchange(operation, flags=0x80, update=payload)
+
+    async def _exchange(
+        self, opcode, *, flags=0x80, command=None, level=None, update=None
+    ):
         from bleak.exc import BleakError
         from bleak_retry_connector import (
             BleakClientWithServiceCache,
@@ -314,7 +321,14 @@ class KindleBleClient:
                         break
                 operation = bytes((opcode | flags,))
                 header = b"kindle-control-v1\0" + nonce + operation
-                if level is not None:
+                if update is not None:
+                    payload = (
+                        update
+                        + hmac.digest(
+                            self.key, b"request\0" + header + update, "sha256"
+                        )[:16]
+                    )
+                elif level is not None:
                     value = level.to_bytes(2, "big")
                     payload = (
                         value
@@ -359,6 +373,14 @@ class KindleBleClient:
             raise KindleError("Kindle BLE response authentication failed") from err
         try:
             fields = json.loads(data)
+            if update is not None:
+                if fields is None:
+                    raise KindleTelemetryUnsupported(
+                        "The Kindle receiver does not support updates"
+                    )
+                if not isinstance(fields, dict):
+                    raise ValueError
+                return fields
             if level is not None:
                 if type(fields) is not int or fields != level:
                     raise ValueError

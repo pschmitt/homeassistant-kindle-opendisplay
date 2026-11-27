@@ -22,6 +22,7 @@ jobs:
         run: |
           version=$(jq -r .version custom_components/kindle_inkwell/manifest.json)
           test "$GITHUB_REF_NAME" = "v$version"
+          test "$(sed -n 's/^version = "\([0-9.]*\)"$/\1/p' Cargo.toml)" = "$version"
       - name: Build the receiver and Inkwell image
         run: |
           nix build '.#checks.x86_64-linux.protocol' --no-link

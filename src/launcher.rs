@@ -1,11 +1,14 @@
 //! Own the panel until the receiver exits or the launcher is stopped.
 
-use crate::{settings::Settings, setup};
+use crate::{settings::Settings, setup, update};
 use anyhow::{Context, Result, bail, ensure};
-use std::{ffi::OsString, fs, io, os::unix::process::ExitStatusExt as _, path::Path};
+use std::{
+    ffi::OsString, fs, io, os::unix::process::ExitStatusExt as _, path::Path, time::Duration,
+};
 use tokio::{
     process::Command,
     signal::unix::{SignalKind, signal},
+    time::{Instant, interval},
 };
 
 const LOCK: &str = "/run/opendisplay-mode.lock";
@@ -89,7 +92,10 @@ pub async fn launch(args: impl IntoIterator<Item = OsString>) -> Result<i32> {
     let mut reload = signal(SignalKind::hangup())?;
     let mut display = Display::acquire()?;
     setup::provision(directory)?;
+    update::rollback(directory)?;
     let receiver = directory.join("kindle-opendisplay");
+    let mut checks = interval(Duration::from_secs(2));
+    let mut trial = None;
     loop {
         let enabled = Settings::load(directory)?.opendisplay;
         if enabled && !exclusive {
@@ -101,20 +107,49 @@ pub async fn launch(args: impl IntoIterator<Item = OsString>) -> Result<i32> {
             display.resume_home();
         }
 
-        let mut child = Command::new(&receiver)
+        let child = Command::new(&receiver)
             .current_dir(directory)
             .arg("--supervise")
             .kill_on_drop(true)
-            .spawn()
-            .context("start OpenDisplay supervisor")?;
-        let restarting = tokio::select! {
-            biased;
-            _ = terminate.recv() => false,
-            _ = interrupt.recv() => false,
-            _ = reload.recv() => true,
-            status = child.wait() => {
-                let status = status?;
-                return Ok(status.code().unwrap_or_else(|| 128 + status.signal().unwrap_or(0)));
+            .spawn();
+        let mut child = match child {
+            Err(_) if trial.take().is_some() => {
+                update::rollback(directory)?;
+                continue;
+            }
+            result => result.context("start OpenDisplay supervisor")?,
+        };
+        enum Next {
+            Stop,
+            Reload,
+            Activate,
+            Rollback,
+        }
+        let next = loop {
+            tokio::select! {
+                biased;
+                _ = terminate.recv() => break Next::Stop,
+                _ = interrupt.recv() => break Next::Stop,
+                _ = reload.recv() => break Next::Reload,
+                status = child.wait() => {
+                    if trial.take().is_some() && update::pending(directory) {
+                        update::rollback(directory)?;
+                        break Next::Reload;
+                    }
+                    let status = status?;
+                    return Ok(status.code().unwrap_or_else(|| 128 + status.signal().unwrap_or(0)));
+                }
+                _ = checks.tick() => {
+                    if let Some(deadline) = trial {
+                        if !update::pending(directory) {
+                            trial = None;
+                        } else if Instant::now() >= deadline {
+                            break Next::Rollback;
+                        }
+                    } else if update::ready(directory) {
+                        break Next::Activate;
+                    }
+                }
             }
         };
         if let Some(pid) = child.id()
@@ -124,8 +159,25 @@ pub async fn launch(args: impl IntoIterator<Item = OsString>) -> Result<i32> {
             return Err(error).context("stop OpenDisplay supervisor");
         }
         child.wait().await?;
-        if !restarting {
-            return Ok(0);
+        match next {
+            Next::Stop => {
+                update::rollback(directory)?;
+                return Ok(0);
+            }
+            Next::Reload => {}
+            Next::Activate => {
+                if let Err(error) = update::activate(directory) {
+                    eprintln!("OpenDisplay update activation: {error:#}");
+                    update::rollback(directory)?;
+                    update::discard_staged(directory)?;
+                    continue;
+                }
+                trial = Some(Instant::now() + update::TRIAL_TIMEOUT);
+            }
+            Next::Rollback => {
+                update::rollback(directory)?;
+                trial = None;
+            }
         }
     }
 }
