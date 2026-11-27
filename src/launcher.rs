@@ -1,6 +1,6 @@
 //! Own the panel until the receiver exits or the launcher is stopped.
 
-use crate::{settings::Settings, setup, update};
+use crate::{frontlight, settings::Settings, setup, update};
 use anyhow::{Context, Result, bail, ensure};
 use std::{
     ffi::OsString, fs, io, os::unix::process::ExitStatusExt as _, path::Path, time::Duration,
@@ -92,6 +92,9 @@ pub async fn launch(args: impl IntoIterator<Item = OsString>) -> Result<i32> {
     let mut reload = signal(SignalKind::hangup())?;
     let mut display = Display::acquire()?;
     setup::provision(directory)?;
+    if !manual && let Err(error) = frontlight::restore() {
+        eprintln!("Restore frontlight brightness: {error:#}");
+    }
     update::rollback(directory)?;
     let receiver = directory.join("kindle-opendisplay");
     let mut checks = interval(Duration::from_secs(2));

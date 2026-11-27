@@ -92,7 +92,7 @@ ID normally includes the Kindle's device name.
 | Switch | **Wi-Fi** | Disconnect or reassociate Wi-Fi over BLE. |
 | Switch | **SSH (Wi-Fi)** | Toggle Inkwell's Wi-Fi SSH listener on port 2022 over BLE. |
 | Switch | **Prevent sleep** | Keep the receiver awake over BLE. The override persists across receiver restarts. |
-| Number | **Frontlight brightness** | Slider from 0% (off) to 100% of the driver maximum. |
+| Number | **Frontlight brightness** | Slider from 0% (off) to 100% of the driver maximum. The last setting is restored on an OpenDisplay boot. |
 | Select | **Orientation** | HA-stored portrait or landscape hint for your dashboard. Defaults to portrait and can be set while the Kindle is offline. |
 | Image | **Screen** | The last frame sent with `kindle_inkwell.upload_image`, turned upright for landscape. Kept in memory, so it is empty after an HA restart until the next upload. |
 | Event | **Event** | New `wake` event after HA observes a recorded timed-suspend resume. Attributes give the device's wake time and suspended seconds. |
@@ -113,7 +113,7 @@ for the sleep and external-power settings.
 
 ## Update the receiver
 
-Install v0.9.0 once using the [Kindle setup guide](opendisplay-ble.md#install-on-the-kindle)
+Install v0.9.1 once using the [Kindle setup guide](opendisplay-ble.md#install-on-the-kindle)
 to enable updates. The **OpenDisplay receiver** update entity compares the
 installed version over authenticated BLE with stable GitHub releases.
 

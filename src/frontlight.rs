@@ -3,14 +3,16 @@
 use crate::{actions, advertising};
 use anyhow::{Context, Result, ensure};
 use serde_json::json;
-use std::{fs, path::Path};
+use std::{fs, io::Write as _, path::Path};
 
 const BACKLIGHT: &str = "/sys/class/backlight/bl";
 const SAVED_LEVEL: &str = "/opt/opendisplay/frontlight-level";
+const ACTIVE_LEVEL: &str = "/opt/opendisplay/frontlight-active-level";
 
 struct Frontlight<'a> {
     directory: &'a Path,
     saved: &'a Path,
+    active: &'a Path,
 }
 
 impl Frontlight<'_> {
@@ -34,6 +36,33 @@ impl Frontlight<'_> {
         Ok(fs::write(self.saved, format!("{level}\n"))?)
     }
 
+    fn remember_active(&self, level: u32) -> Result<()> {
+        let directory = self.active.parent().context("frontlight state directory")?;
+        let mut staged = tempfile::NamedTempFile::new_in(directory)?;
+        writeln!(staged, "{level}")?;
+        staged.as_file().sync_all()?;
+        staged.persist(self.active)?;
+        fs::File::open(directory)?.sync_all()?;
+        Ok(())
+    }
+
+    fn restore(&self) -> Result<()> {
+        let value = match fs::read_to_string(self.active) {
+            Ok(value) => value,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => return Err(error.into()),
+        };
+        let level = value.trim().parse()?;
+        ensure!(
+            level <= self.read_level("max_brightness")?,
+            "invalid persisted brightness"
+        );
+        if level != self.read_level("brightness")? {
+            self.apply(level)?;
+        }
+        Ok(())
+    }
+
     fn set(&self, requested: u32, current: u32) -> Result<()> {
         if requested == 0 && current > 0 {
             self.save(current)?;
@@ -42,10 +71,11 @@ impl Frontlight<'_> {
         if requested > 0 {
             self.save(requested)?;
         }
-        Ok(())
+        self.remember_active(requested)
     }
 
     fn toggle(&self, enabled: bool, current: u32) -> Result<()> {
+        let mut applied = current;
         if enabled && current == 0 {
             let level = match fs::read_to_string(self.saved) {
                 Ok(text) if !text.is_empty() => text.trim().parse()?,
@@ -58,11 +88,13 @@ impl Frontlight<'_> {
                 "invalid saved brightness"
             );
             self.apply(level)?;
+            applied = level;
         } else if !enabled && current > 0 {
             self.save(current)?;
             self.apply(0)?;
+            applied = 0;
         }
-        Ok(())
+        self.remember_active(applied)
     }
 }
 
@@ -70,7 +102,12 @@ fn device() -> Frontlight<'static> {
     Frontlight {
         directory: Path::new(BACKLIGHT),
         saved: Path::new(SAVED_LEVEL),
+        active: Path::new(ACTIVE_LEVEL),
     }
+}
+
+pub fn restore() -> Result<()> {
+    device().restore()
 }
 
 pub fn set(level: u16) -> Result<()> {
@@ -150,10 +187,14 @@ mod tests {
         fs::write(path.join("brightness"), "150\n")?;
         fs::write(path.join("max_brightness"), "300\n")?;
         let saved = path.join("saved");
+        let active = path.join("active");
         let light = Frontlight {
             directory: path,
             saved: &saved,
+            active: &active,
         };
+        light.restore()?;
+        assert_eq!(light.read_level("brightness")?, 150);
         light.toggle(false, 150)?;
         assert_eq!(light.read_level("brightness")?, 0);
         light.toggle(true, 0)?;
@@ -162,7 +203,14 @@ mod tests {
         assert_eq!(fs::read_to_string(&saved)?, "200\n");
         light.set(0, 200)?;
         assert_eq!(light.read_level("brightness")?, 0);
-        assert_eq!(fs::read_to_string(saved)?, "200\n");
+        assert_eq!(fs::read_to_string(&saved)?, "200\n");
+        fs::write(path.join("brightness"), "75\n")?;
+        light.restore()?;
+        assert_eq!(light.read_level("brightness")?, 0);
+        light.toggle(true, 0)?;
+        fs::write(path.join("brightness"), "75\n")?;
+        light.restore()?;
+        assert_eq!(light.read_level("brightness")?, 200);
         Ok(())
     }
 }

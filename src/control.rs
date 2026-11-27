@@ -27,7 +27,7 @@ pub enum Request {
     FrontlightLevel(u16),
     Command(String),
     UpdateStatus,
-    StartUpdate { version: String, digest: [u8; 32] },
+    StartUpdate(String),
     ConfirmUpdate(String),
 }
 
@@ -120,15 +120,13 @@ impl<'a> Session<'a> {
             );
             match opcode {
                 UPDATE_STATUS if payload.is_empty() => Request::UpdateStatus,
-                UPDATE_START if (37..=64).contains(&payload.len()) => {
-                    let (digest, version) = payload.split_at(32);
-                    Request::StartUpdate {
-                        version: std::str::from_utf8(version)?.to_owned(),
-                        digest: digest.try_into()?,
+                UPDATE_START | UPDATE_CONFIRM if payload.len() == 3 => {
+                    let version = format!("{}.{}.{}", payload[0], payload[1], payload[2]);
+                    if opcode == UPDATE_START {
+                        Request::StartUpdate(version)
+                    } else {
+                        Request::ConfirmUpdate(version)
                     }
-                }
-                UPDATE_CONFIRM if (5..=32).contains(&payload.len()) => {
-                    Request::ConfirmUpdate(std::str::from_utf8(payload)?.to_owned())
                 }
                 _ => anyhow::bail!("invalid update payload"),
             }
@@ -228,11 +226,11 @@ mod tests {
         Ok(())
     }
     #[test]
-    fn update_authentication_covers_version_and_digest() -> Result<()> {
+    fn update_authentication_covers_the_compact_version() -> Result<()> {
         let key = [0x23; 32];
         let mut session = Session::new(&key);
-        let payload = [&[0x46u8; 32][..], b"0.9.1"].concat();
-        for altered in [None, Some(1), Some(37)] {
+        let payload = [0u8, 9, 1];
+        for altered in [None, Some(1), Some(3)] {
             let nonce = session.challenge()?;
             let tag = mac(
                 &key,
@@ -246,8 +244,7 @@ mod tests {
                 let request = session.authenticate(&packet)?;
                 assert!(matches!(
                     request.request,
-                    Request::StartUpdate { version, digest }
-                        if version == "0.9.1" && digest == [0x46; 32]
+                    Request::StartUpdate(version) if version == "0.9.1"
                 ));
                 assert!(session.authenticate(&packet).is_err());
             }

@@ -68,7 +68,7 @@ impl<'a> Actions<'a> {
                 }
             },
             Request::UpdateStatus => self.update_status().await,
-            Request::StartUpdate { version, digest } => {
+            Request::StartUpdate(version) => {
                 if !self.paperwhite {
                     return json!({"error": "unsupported"});
                 }
@@ -83,10 +83,13 @@ impl<'a> Actions<'a> {
                     return json!({"error": error.to_string()});
                 }
                 let version = version.to_owned();
-                let digest = *digest;
                 self.update_failed = false;
                 self.update_job = Some(tokio::spawn(async move {
-                    update::fetch(&version, &digest).await
+                    let result = update::fetch(&version).await;
+                    if let Err(error) = &result {
+                        eprintln!("Stage OpenDisplay release {version}: {error:#}");
+                    }
+                    result
                 }));
                 json!({"accepted": true})
             }
@@ -127,6 +130,7 @@ impl<'a> Actions<'a> {
         let directory = Path::new(DIRECTORY);
         json!({
             "version": update::VERSION,
+            "protocol": 2,
             "trial": update::pending(directory),
             "busy": update::ready(directory) || self.update_job.is_some(),
             "failed": self.update_failed,

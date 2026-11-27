@@ -121,13 +121,8 @@ pub fn inhibits_sleep() -> bool {
             .is_ok_and(|lock| matches!(lock.try_lock(), Err(TryLockError::WouldBlock)))
 }
 
-pub async fn fetch(version: &str, digest: &[u8; 32]) -> Result<()> {
-    let lock = download_lock()?;
-    lock.try_lock().context("another download is running")?;
-    check_request(version)?;
-    let directory = Path::new(DIRECTORY);
-    let temporary = tempfile::NamedTempFile::new_in(directory)?;
-    let url = format!("{REPOSITORY}/releases/download/v{version}/kindle-opendisplay-armv7");
+async fn download(version: &str, asset: &str, path: &Path, max_size: u64) -> Result<()> {
+    let url = format!("{REPOSITORY}/releases/download/v{version}/{asset}");
     let result = Command::new("/usr/bin/curl")
         .args([
             "--disable",
@@ -142,14 +137,14 @@ pub async fn fetch(version: &str, digest: &[u8; 32]) -> Result<()> {
             "--max-redirs",
             "5",
             "--max-time",
-            "100",
+            "45",
             "--connect-timeout",
             "10",
             "--max-filesize",
         ])
-        .arg(MAX_SIZE.to_string())
+        .arg(max_size.to_string())
         .arg("--output")
-        .arg(temporary.path())
+        .arg(path)
         .arg("--")
         .arg(url)
         .kill_on_drop(true)
@@ -157,10 +152,41 @@ pub async fn fetch(version: &str, digest: &[u8; 32]) -> Result<()> {
         .await
         .context("download release")?;
     ensure!(result.success(), "release download failed");
+    ensure!(
+        fs::metadata(path)?.len() <= max_size,
+        "release asset exceeds size limit"
+    );
+    Ok(())
+}
+
+const ASSET: &str = "kindle-opendisplay-armv7";
+
+fn checksum(text: &str) -> Result<[u8; 32]> {
+    let mut entries = text.lines().filter_map(|line| {
+        let (sum, name) = line.split_once("  ")?;
+        (name == ASSET).then_some(sum)
+    });
+    let hash = entries.next().context("missing ARMv7 checksum")?;
+    ensure!(entries.next().is_none(), "duplicate ARMv7 checksums");
+    let mut digest = [0; 32];
+    hex::decode_to_slice(hash, &mut digest).context("invalid ARMv7 checksum")?;
+    Ok(digest)
+}
+
+pub async fn fetch(version: &str) -> Result<()> {
+    let lock = download_lock()?;
+    lock.try_lock().context("another download is running")?;
+    check_request(version)?;
+    let directory = Path::new(DIRECTORY);
+    let sums = tempfile::NamedTempFile::new_in(directory)?;
+    download(version, "SHA256SUMS", sums.path(), 4096).await?;
+    let digest = checksum(&fs::read_to_string(sums.path())?)?;
+    let temporary = tempfile::NamedTempFile::new_in(directory)?;
+    download(version, ASSET, temporary.path(), MAX_SIZE).await?;
     let bytes = fs::read(temporary.path())?;
     ensure!(bytes.len() as u64 <= MAX_SIZE, "release exceeds size limit");
     ensure!(
-        <[u8; 32]>::from(Sha256::digest(&bytes)) == *digest,
+        <[u8; 32]>::from(Sha256::digest(&bytes)) == digest,
         "release digest mismatch"
     );
     temporary
@@ -196,6 +222,15 @@ mod tests {
         for invalid in ["../0.9.1", "0.09.1", "0.9", "0.9.1-rc", "v0.9.1", "+0.9.1"] {
             assert_eq!(parse_version(invalid), None);
         }
+    }
+
+    #[test]
+    fn checksum_is_for_the_exact_binary_and_rejects_duplicates() -> Result<()> {
+        let checksums = format!("{}  {ASSET}\n", "ab".repeat(32));
+        assert_eq!(checksum(&checksums)?, [0xab; 32]);
+        assert!(checksum(&checksums.replace(ASSET, "another-file")).is_err());
+        assert!(checksum(&checksums.repeat(2)).is_err());
+        Ok(())
     }
 
     #[test]

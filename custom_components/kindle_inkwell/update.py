@@ -43,7 +43,13 @@ def _release(document):
     tag = document.get("tag_name")
     if not isinstance(tag, str) or not tag.startswith("v") or not _version(tag[1:]):
         return None
-    for asset in document.get("assets", []):
+    assets = document.get("assets", [])
+    if not any(asset.get("name") == "SHA256SUMS" for asset in assets):
+        return None
+    numbers = _version(tag[1:])
+    if any(number > 255 for number in numbers):
+        return None
+    for asset in assets:
         digest = asset.get("digest")
         size = asset.get("size")
         if (
@@ -53,7 +59,7 @@ def _release(document):
             and isinstance(digest, str)
             and re.fullmatch(r"sha256:[a-f0-9]{64}", digest)
         ):
-            return tag[1:], bytes.fromhex(digest.removeprefix("sha256:"))
+            return tag[1:], bytes(numbers)
     return None
 
 
@@ -94,7 +100,7 @@ class KindleReceiverUpdate(UpdateEntity):
         except KindleError:
             return
         installed = state.get("version")
-        if _version(installed) is None:
+        if state.get("protocol") != 2 or _version(installed) is None:
             self._attr_available = False
             return
         self._next_poll = monotonic() + _POLL_SECONDS
@@ -126,17 +132,21 @@ class KindleReceiverUpdate(UpdateEntity):
         client = self.coordinator.client
         if candidate is None or client is None or self._installing:
             raise HomeAssistantError("No Kindle receiver release can be installed")
-        target, digest = candidate
+        target, encoded_version = candidate
         if version not in (None, target) or backup:
             raise HomeAssistantError("Only the latest receiver release is supported")
         self._installing = True
         try:
             try:
-                response = await client.receiver_update(
-                    _START, digest + target.encode()
-                )
+                response = await client.receiver_update(_START, encoded_version)
             except KindleLinkError:
-                # The request may have succeeded before the connection was lost.
+                # Keep polling only if the request reached the receiver.
+                try:
+                    status = await client.receiver_update(_STATUS)
+                except KindleLinkError:
+                    status = {}
+                if not (status.get("busy") is True or status.get("version") == target):
+                    raise
                 response = None
             if response is not None and response.get("accepted") is not True:
                 raise HomeAssistantError(
@@ -155,7 +165,7 @@ class KindleReceiverUpdate(UpdateEntity):
                             continue
                         if status.get("trial") is True:
                             reply = await client.receiver_update(
-                                _CONFIRM, target.encode()
+                                _CONFIRM, encoded_version
                             )
                             if reply.get("confirmed") is not True:
                                 raise HomeAssistantError(
