@@ -9,9 +9,14 @@ then
 fi
 unset OPENDISPLAY_SIGNALS_READY
 
+exclusive=0
 case "${1:-}" in
   --manual) ;;
-  '')
+  ''|--boot-exclusive)
+    if [ "${1:-}" = --boot-exclusive ]
+    then
+      exclusive=1
+    fi
     boot_status=0
     python3 settings.py autostart || boot_status=$?
     case "$boot_status" in
@@ -20,7 +25,7 @@ case "${1:-}" in
       *) exit "$boot_status" ;;
     esac
     ;;
-  *) printf '%s\n' 'Usage: start [--manual]' >&2; exit 2 ;;
+  *) printf '%s\n' 'Usage: start [--manual|--boot-exclusive]' >&2; exit 2 ;;
 esac
 
 mode_lock=/run/opendisplay-mode.lock
@@ -65,7 +70,7 @@ do
   python3 settings.py opendisplay || display_status=$?
   case "$display_status" in
     0)
-      if [ -z "$home_pid" ]
+      if [ "$exclusive" -eq 0 ] && [ -z "$home_pid" ]
       then
         home_pid=$(pidof -s home) || {
           printf '%s\n' 'OpenDisplay requires a running Inkwell home process.' >&2
@@ -74,7 +79,13 @@ do
         kill -STOP "$home_pid"
       fi
       ;;
-    1) resume_home ;;
+    1)
+      if [ "$exclusive" -eq 1 ]
+      then
+        exit 0
+      fi
+      resume_home
+      ;;
     *) exit "$display_status" ;;
   esac
   if [ -x ./kindle-opendisplay ]

@@ -19,13 +19,44 @@ SOURCE = Path(__file__).resolve().parent
 TARGET = Path("/opt/opendisplay")
 INIT = Path("/sbin/own-init")
 BOOT = Path("/mnt/us/linux")
-HOOK = """# Start OpenDisplay after Inkwell rearms its boot marker.
+PREVIOUS_HOOK = """# Start OpenDisplay after Inkwell rearms its boot marker.
 if [ -d /sys/class/power_supply/bd71827_bat ] && [ -f /opt/opendisplay/autostart ] && [ -x /opt/opendisplay/start ]; then
     (
         sleep 25
         exec /opt/opendisplay/start
     ) </dev/null >>/var/log/opendisplay.log 2>&1 &
     printf '%s\\n' "$!" >/run/opendisplay.pid
+fi
+
+"""
+HOOK = """# Let OpenDisplay own the panel before starting Inkwell Home.
+if [ -d /sys/class/power_supply/bd71827_bat ] && [ -f /opt/opendisplay/autostart ] && [ -x /opt/opendisplay/start ] &&
+    python3 /opt/opendisplay/settings.py autostart; then
+    if python3 /opt/opendisplay/settings.py opendisplay; then
+        (
+            sleep 25
+            exec /opt/opendisplay/start --boot-exclusive
+        ) </dev/null >>/var/log/opendisplay.log 2>&1 &
+        receiver_pid=$!
+        printf '%s\\n' "$receiver_pid" >/run/opendisplay.pid
+        (
+            sleep 45
+            if { kill -0 "$receiver_pid" 2>/dev/null && [ -d /run/opendisplay-mode.lock ]; } || pidof home >/dev/null; then
+                if [ -f "$U/BOOT_OWN.trying" ]; then
+                    mv "$U/BOOT_OWN.trying" "$U/BOOT_OWN" && sync
+                fi
+            fi
+        ) &
+        wait "$receiver_pid"
+        rm -f /run/opendisplay.pid
+    fi
+    if ! python3 /opt/opendisplay/settings.py opendisplay; then
+        (
+            sleep 25
+            exec /opt/opendisplay/start
+        ) </dev/null >>/var/log/opendisplay.log 2>&1 &
+        printf '%s\\n' "$!" >/run/opendisplay.pid
+    fi
 fi
 
 """
@@ -93,8 +124,15 @@ def install_dependencies(stage):
 
 def patch_init(init):
     """Insert the same start hook in the installer and image build."""
-    if "/opt/opendisplay/autostart" in init:
+    if HOOK in init:
         return init
+    legacy_hook = PREVIOUS_HOOK.replace(
+        "after Inkwell rearms its boot marker",
+        "after home has passed Inkwell's boot re-arm checkpoint",
+    ).replace("[ -d /sys/class/power_supply/bd71827_bat ] && ", "")
+    init = init.replace(PREVIOUS_HOOK, "").replace(legacy_hook, "")
+    if "/opt/opendisplay/autostart" in init:
+        raise ValueError("This Inkwell init script has an unrecognized OpenDisplay hook.")
     if init.count("\ncrashes=0\n") != 1:
         raise ValueError(
             "This Inkwell init script lacks the expected boot hook location."
