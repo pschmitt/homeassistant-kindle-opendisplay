@@ -22,6 +22,11 @@ After reboot, both USB and Wi-Fi SSH returned, OpenDisplay owned the
 panel before Inkwell Home, the boot marker rearmed, and Home Assistant
 sent a fresh dashboard frame.
 
+The single-binary launcher and frontlight commands were verified in a
+subsequent in-place upgrade. After reboot, USB and Wi-Fi SSH returned,
+the Rust launcher owned the panel, and Home Assistant sent a fresh frame.
+The legacy frontlight status, battery, and info commands still worked.
+
 A timed suspend resumed without a reboot, restarted BLE and restored the
 Wi-Fi lease. Home Assistant then delivered a fresh dashboard frame. The
 frontlight slider was verified against the driver's actual brightness.
