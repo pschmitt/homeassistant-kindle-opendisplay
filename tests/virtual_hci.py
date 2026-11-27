@@ -4,8 +4,11 @@
 """Exercise the Rust receiver over H4, GAP, and GATT without Kindle hardware."""
 
 import asyncio
+import base64
 import hmac
 import json
+import os
+import pwd
 import sys
 import tempfile
 import zlib
@@ -62,12 +65,14 @@ async def run(binary, directory):
     identity = directory / "device.json"
     identity.write_text(json.dumps({"name": "ODTest", "address": ADDRESS}))
     (directory / "control.key").write_text(KEY.hex())
+    if os.geteuid() == 0:
+        (directory / "config.toml").write_text("[commands]\nenabled = true\n")
     frame_path = directory / "frame.raw"
     server = await asyncio.start_server(transport, "127.0.0.1", 0)
     async with server:
         port = server.sockets[0].getsockname()[1]
         receiver = await asyncio.create_subprocess_exec(
-            str(binary),
+            *binary,
             f"tcp:127.0.0.1:{port}",
             str(identity),
             str(frame_path),
@@ -140,13 +145,20 @@ async def authenticated_control(peer):
     assert len(nonce) == 16
     header = CONTEXT + nonce + b"\x89"
     key = hmac.digest(KEY, b"kindle-control command request encryption", "sha256")
-    packet = b"\x89" + AESGCM(key).encrypt(nonce[:12], b"id", header)
+    packet = b"\x89" + AESGCM(key).encrypt(
+        nonce[:12], b"id -u; printf stderr >&2", header
+    )
     await peer.write_value(request, packet, with_response=True)
     key = hmac.digest(KEY, b"kindle-control response encryption", "sha256")
     sealed = await peer.read_value(response)
-    assert json.loads(AESGCM(key).decrypt(nonce[:12], sealed, header)) == {
-        "error": "disabled"
-    }
+    result = json.loads(AESGCM(key).decrypt(nonce[:12], sealed, header))
+    if os.geteuid() == 0:
+        assert not result["timed_out"] and not result["truncated"]
+        assert result["exit_code"] == 0
+        assert int(base64.b64decode(result["stdout"])) == pwd.getpwnam("nobody").pw_uid
+        assert base64.b64decode(result["stderr"]) == b"stderr"
+    else:
+        assert result == {"error": "disabled"}
     await expect_denied(peer.write_value(request, packet, with_response=True))
 
     nonce = await peer.read_value(challenge)
@@ -160,7 +172,7 @@ async def authenticated_control(peer):
 
 async def main():
     with tempfile.TemporaryDirectory() as directory:
-        await asyncio.wait_for(run(Path(sys.argv[1]).resolve(), Path(directory)), 30)
+        await asyncio.wait_for(run(sys.argv[1:], Path(directory)), 30)
 
 
 if __name__ == "__main__":

@@ -169,18 +169,16 @@ fn read(path: &str) -> Option<String> {
 }
 
 async fn telemetry() -> Result<Vec<Value>> {
-    let battery = "/sys/class/power_supply/bd71827_bat";
-    let capacity = read(&format!("{battery}/capacity"))
-        .context("read battery capacity")?
-        .parse::<u8>()?;
-    let charge = read(&format!("{battery}/status")).context("read battery status")?;
+    let crate::advertising::Battery {
+        capacity,
+        status: charge,
+    } = crate::advertising::battery().context("read battery state")?;
     ensure!(
-        capacity <= 100
-            && matches!(
-                charge.as_str(),
-                "Charging" | "Discharging" | "Full" | "Not charging" | "Unknown"
-            ),
-        "invalid battery data"
+        matches!(
+            charge.as_str(),
+            "Charging" | "Discharging" | "Full" | "Not charging" | "Unknown"
+        ),
+        "invalid battery status"
     );
     let light = read("/sys/class/backlight/bl/brightness")
         .context("read frontlight")?

@@ -23,19 +23,43 @@ pub fn temperature() -> u8 {
         })
 }
 
-fn battery_data(path: &Path) -> Vec<u8> {
-    let Some(capacity) = fs::read_to_string(path.join("capacity"))
+pub struct Battery {
+    pub capacity: u8,
+    pub status: String,
+}
+
+pub fn battery() -> Option<Battery> {
+    let path = Path::new(BATTERY);
+    let capacity = fs::read_to_string(path.join("capacity"))
         .ok()
         .and_then(|value| value.trim().parse::<u8>().ok())
-        .filter(|&value| value <= 100)
-    else {
-        return Vec::new();
+        .filter(|&value| value <= 100)?;
+    let status = match fs::read_to_string(path.join("status")) {
+        Ok(status) => status.trim().to_owned(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            let charging = fs::read_to_string(path.join("charging")).ok()?;
+            let online = fs::read_to_string("/sys/class/power_supply/bd71827_ac/online")
+                .is_ok_and(|online| online.trim() == "1");
+            if charging.trim() == "1" {
+                "Charging"
+            } else if online && capacity == 100 {
+                "Full"
+            } else {
+                "Discharging"
+            }
+            .to_owned()
+        }
+        Err(_) => return None,
     };
-    let Ok(status) = fs::read_to_string(path.join("status")) else {
+    Some(Battery { capacity, status })
+}
+
+fn battery_data() -> Vec<u8> {
+    let Some(Battery { capacity, status }) = battery() else {
         return Vec::new();
     };
     let mut data = vec![6, 0x16, 0xd2, 0xfc, 0x40, 1, capacity];
-    match status.trim() {
+    match status.as_str() {
         "Charging" => data.extend([0x16, 1]),
         "Discharging" | "Full" | "Not charging" => data.extend([0x16, 0]),
         _ => {}
@@ -62,7 +86,7 @@ pub fn packets(name: &str, battery: bool, display: bool) -> (Vec<u8>, Vec<u8>) {
         data.extend(manufacturer);
     }
     if battery {
-        data.extend(battery_data(Path::new(BATTERY)));
+        data.extend(battery_data());
     }
     (data, scan)
 }

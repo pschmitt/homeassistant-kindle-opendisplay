@@ -25,6 +25,12 @@ on upgrades. It reports the address for the
 [Home Assistant integration](kindle-inkwell.md). Start the launcher from
 an Inkwell shell or reboot into Inkwell when ready to activate the display.
 
+For the Rust receiver, build the ARMv7 binary with `nix build '.#kindle-armv7'`
+and copy it to the Kindle. Pass `--receiver-binary PATH` to the post-installer
+to install it. The launcher selects the installed native binary and retains
+the Python receiver and dependencies from an earlier installation. A full
+[Inkwell image](inkwell-image.md) includes the Rust receiver.
+
 ## Device settings
 
 Edit `/opt/opendisplay/config.toml` on the Kindle:

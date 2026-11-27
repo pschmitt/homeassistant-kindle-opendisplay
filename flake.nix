@@ -1,19 +1,76 @@
 {
   description = "Development environment for Kindle OpenDisplay and Kindle Inkwell";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-
-  inputs.crane.url = "github:ipetkov/crane";
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    crane.url = "github:ipetkov/crane";
+    inkwell = {
+      url = "github:akaped/Inkwell/29cc6d02c14c6897fe47356d228b318c846fdfcd";
+      flake = false;
+    };
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
 
   outputs =
-    { crane, nixpkgs, ... }:
+    {
+      crane,
+      inkwell,
+      nixpkgs,
+      rust-overlay,
+      ...
+    }:
     let
       eachSystem = nixpkgs.lib.genAttrs [
         "x86_64-linux"
         "aarch64-linux"
       ];
     in
-    {
+    rec {
+      hydraJobs = eachSystem (system: packages.${system} // checks.${system});
+
+      packages = eachSystem (
+        system:
+        let
+          pkgs = import nixpkgs {
+            inherit system;
+            overlays = [ rust-overlay.overlays.default ];
+          };
+          target = "armv7-unknown-linux-musleabihf";
+          toolchain = pkgs.rust-bin.stable."1.99.1".minimal.override {
+            targets = [ target ];
+          };
+          craneLib = (crane.mkLib pkgs).overrideToolchain toolchain;
+          src = craneLib.cleanCargoSource ./.;
+          common = {
+            inherit src;
+            doCheck = false;
+            CARGO_BUILD_TARGET = target;
+            RUSTFLAGS = "-C linker=rust-lld -C link-self-contained=yes";
+          };
+        in
+        rec {
+          inkwell-pw4 = import ./nix/inkwell.nix {
+            inherit pkgs;
+            upstream = inkwell;
+            receiver = kindle-armv7;
+          };
+
+          kindle-armv7 = craneLib.buildPackage (
+            common
+            // {
+              cargoArtifacts = craneLib.buildDepsOnly common;
+              nativeBuildInputs = [ pkgs.file ];
+              postInstall = ''
+                file "$out/bin/kindle-opendisplay" | grep -E 'ELF 32-bit .* ARM.*(statically linked|static-pie linked)'
+              '';
+            }
+          );
+        }
+      );
+
       checks = eachSystem (
         system:
         let

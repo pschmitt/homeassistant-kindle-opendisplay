@@ -22,3 +22,21 @@ jobs:
       - uses: astral-sh/setup-uv@v10.3.3
       - run: cargo build --locked
       - run: uv run tests/virtual_hci.py target/debug/kindle-opendisplay
+
+  nix-lint:
+    uses: pschmitt/ci-workflows/.github/workflows/nix-lint.yaml@main
+
+  kindle-armv7:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pschmitt/ci-workflows/.github/actions/nix-setup@main
+      - uses: astral-sh/setup-uv@v10.3.3
+      - run: nix build '.#kindle-armv7'
+      - run: |
+          nix shell --inputs-from . 'nixpkgs#qemu-user' 'nixpkgs#python314' -c \
+            uv run --no-python-downloads tests/virtual_hci.py qemu-arm -cpu cortex-a9 result/bin/kindle-opendisplay
+      - uses: actions/upload-artifact@v7
+        with:
+          name: kindle-opendisplay-armv7
+          path: result/bin/kindle-opendisplay

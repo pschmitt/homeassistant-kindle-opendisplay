@@ -35,6 +35,8 @@ release_display() {
 }
 trap release_display EXIT
 
+python3 provision.py
+
 child=
 reload=0
 stop=0
@@ -69,7 +71,12 @@ do
     1) resume_home ;;
     *) exit "$display_status" ;;
   esac
-  python3 receiver.py kindle-pw4 device.json frame.bin --render &
+  if [ -x ./kindle-opendisplay ]
+  then
+    ./kindle-opendisplay kindle-pw4 device.json frame.bin --render &
+  else
+    python3 receiver.py kindle-pw4 device.json frame.bin --render &
+  fi
   child=$!
   if [ "$stop" -eq 1 ] || [ "$reload" -eq 1 ]
   then

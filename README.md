@@ -28,7 +28,9 @@ configure the [Home Assistant integration](docs/kindle-inkwell.md).
 ## Development
 
 Run `nix develop` for the Python, Rust, and linting tools on Linux.
-The [roadmap](docs/roadmap.md) tracks the Rust port and Kindle image builds.
+Build the ARMv7 receiver with `nix build '.#kindle-armv7'`. See the
+[Inkwell image guide](docs/inkwell-image.md) for the full Paperwhite 4
+image and current hardware validation status.
 
 ## Documentation
 
@@ -37,6 +39,7 @@ The [roadmap](docs/roadmap.md) tracks the Rust port and Kindle image builds.
 | [OpenDisplay BLE](docs/opendisplay-ble.md) | Kindle post-install, panel refresh, and Bluetooth hardware findings. |
 | [Home Assistant integration](docs/kindle-inkwell.md) | Marketplace link, pairing, BLE controls, and image uploads. |
 | [Tested device](docs/tested-device.md) | Hardware, firmware, and verification on the Paperwhite 4. |
+| [Inkwell image](docs/inkwell-image.md) | Nix-built Paperwhite 4 archive and ARMv7 receiver. |
 | [Roadmap](docs/roadmap.md) | Rust, Crane, Circus, and prebuilt Inkwell images. |
 
 ## License

@@ -124,7 +124,11 @@ impl Identity {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
-    let mut args = std::env::args_os().skip(1);
+    let mut args = std::env::args_os().skip(1).peekable();
+    if args.peek().is_some_and(|arg| arg == "--version") {
+        println!("kindle-opendisplay {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
     let (Some(transport), Some(identity), Some(output)) = (args.next(), args.next(), args.next())
     else {
         bail!(

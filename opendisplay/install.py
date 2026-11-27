@@ -4,7 +4,6 @@
 import argparse
 import json
 import os
-import secrets
 import shutil
 import subprocess
 import sys
@@ -13,6 +12,7 @@ import venv
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from provision import provision
 from settings import install_settings
 
 SOURCE = Path(__file__).resolve().parent
@@ -20,7 +20,7 @@ TARGET = Path("/opt/opendisplay")
 INIT = Path("/sbin/own-init")
 BOOT = Path("/mnt/us/linux")
 HOOK = """# Start OpenDisplay after Inkwell rearms its boot marker.
-if [ -f /opt/opendisplay/autostart ] && [ -x /opt/opendisplay/start ]; then
+if [ -d /sys/class/power_supply/bd71827_bat ] && [ -f /opt/opendisplay/autostart ] && [ -x /opt/opendisplay/start ]; then
     (
         sleep 25
         exec /opt/opendisplay/start
@@ -91,7 +91,18 @@ def install_dependencies(stage):
     )
 
 
-def install(cpu_latency_us=None):
+def patch_init(init):
+    """Insert the same start hook in the installer and image build."""
+    if "/opt/opendisplay/autostart" in init:
+        return init
+    if init.count("\ncrashes=0\n") != 1:
+        raise ValueError(
+            "This Inkwell init script lacks the expected boot hook location."
+        )
+    return init.replace("\ncrashes=0\n", f"\n{HOOK}crashes=0\n")
+
+
+def install(cpu_latency_us=None, receiver_binary=None):
     """Install the receiver, its configuration and its boot hook."""
     if (
         os.geteuid() != 0
@@ -104,68 +115,55 @@ def install(cpu_latency_us=None):
     if sys.version_info[:2] != (3, 14):
         raise SystemExit("This installer requires Inkwell with Python 3.14.")
     init = INIT.read_text()
-    hooked = "/opt/opendisplay/autostart" in init
-    if not hooked and init.count("\ncrashes=0\n") != 1:
-        raise SystemExit(
-            "This Inkwell init script lacks the expected boot hook location."
-        )
+    try:
+        patched_init = patch_init(init)
+    except ValueError as error:
+        raise SystemExit(str(error)) from error
 
     TARGET.mkdir(exist_ok=True)
     with TemporaryDirectory(prefix=".install-", dir=TARGET) as directory:
         stage = Path(directory)
-        install_dependencies(stage)
+        use_python = (
+            receiver_binary is None and not (TARGET / "kindle-opendisplay").is_file()
+        )
+        if use_python:
+            install_dependencies(stage)
+        if receiver_binary is not None:
+            binary = stage / "kindle-opendisplay"
+            shutil.copyfile(receiver_binary, binary)
+            binary.chmod(0o755)
+            subprocess.run([binary, "--version"], check=True)
+            binary.replace(TARGET / binary.name)
         for name in (
             "receiver.py",
             "kindle_gatt.py",
             "settings.py",
+            "provision.py",
             "frontlight",
             "start",
         ):
             shutil.copy2(SOURCE / name, stage / name)
             (stage / name).replace(TARGET / name)
-        active_deps = TARGET / "deps"
-        if active_deps.exists():
-            active_deps.rename(stage / "previous-deps")
-        try:
-            (stage / "deps").rename(active_deps)
-        except OSError:
-            if (stage / "previous-deps").exists():
-                (stage / "previous-deps").rename(active_deps)
-            raise
+        if use_python:
+            active_deps = TARGET / "deps"
+            if active_deps.exists():
+                active_deps.rename(stage / "previous-deps")
+            try:
+                (stage / "deps").rename(active_deps)
+            except OSError:
+                if (stage / "previous-deps").exists():
+                    (stage / "previous-deps").rename(active_deps)
+                raise
 
-    config = TARGET / "device.json"
-    if not config.exists():
-        address = bytearray(secrets.token_bytes(6))
-        address[0] |= 0xC0
-        config.write_text(
-            json.dumps(
-                {
-                    "name": "ODKindlePaperwhite4",
-                    "address": address.hex(":").upper(),
-                    "advertising_interval_min": 100,
-                    "advertising_interval_max": 150,
-                },
-                indent=2,
-            )
-            + "\n"
-        )
-    key = TARGET / "control.key"
-    if not key.exists():
-        with os.fdopen(
-            os.open(key, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600), "w"
-        ) as stream:
-            stream.write(secrets.token_hex(32) + "\n")
-    key.chmod(0o600)
+    config, key = provision(TARGET)
 
-    if not hooked:
+    if init != patched_init:
         backup = INIT.with_suffix(".pre-opendisplay")
         if not backup.exists():
             shutil.copy2(INIT, backup)
         with TemporaryDirectory(prefix=".opendisplay-", dir=INIT.parent) as directory:
             staged_init = Path(directory) / INIT.name
-            staged_init.write_text(
-                init.replace("\ncrashes=0\n", f"\n{HOOK}crashes=0\n")
-            )
+            staged_init.write_text(patched_init)
             shutil.copymode(INIT, staged_init)
             subprocess.run(["/bin/sh", "-n", staged_init], check=True)
             staged_init.replace(INIT)
@@ -185,4 +183,10 @@ if __name__ == "__main__":
         choices=(0, 50),
         help="Set the receiver's CPU idle latency limit. Omit to retain the installed setting.",
     )
-    install(parser.parse_args().cpu_latency_us)
+    parser.add_argument(
+        "--receiver-binary",
+        type=Path,
+        help="Install the built Kindle ARMv7 receiver in place of Python BLE dependencies.",
+    )
+    args = parser.parse_args()
+    install(args.cpu_latency_us, args.receiver_binary)
