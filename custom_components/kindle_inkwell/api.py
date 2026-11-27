@@ -237,18 +237,22 @@ class KindleBleClient:
                         max_attempts=1,
                         use_services_cache=attempt == 0,
                     )
-                    if client.services.get_characteristic(_CHALLENGE) is not None:
-                        break
                     try:
-                        if attempt == 1:
+                        if client.services.get_characteristic(_CHALLENGE) is None:
                             raise KindleError("Kindle control service is missing")
-                        await client.clear_cache()
-                    finally:
-                        await client.disconnect()
+                        nonce = await client.read_gatt_char(_CHALLENGE)
+                        if len(nonce) != 16:
+                            raise KindleError("Invalid Kindle challenge")
+                    except (BleakError, KindleError):
+                        try:
+                            if attempt == 1:
+                                raise
+                            await client.clear_cache()
+                        finally:
+                            await client.disconnect()
+                    else:
+                        break
                 try:
-                    nonce = await client.read_gatt_char(_CHALLENGE)
-                    if len(nonce) != 16:
-                        raise KindleError("Invalid Kindle challenge")
                     operation = bytes((opcode | flags,))
                     header = b"kindle-control-v1\0" + nonce + operation
                     if command is None:
