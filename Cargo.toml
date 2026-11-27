@@ -9,7 +9,7 @@ flate2 = "1"
 libc = "0.2"
 anyhow = "1"
 aes-gcm = "0.10"
-base64 = "0.22"
+base64 = "0.23"
 bt-hci-serial = "0.1"
 critical-section = { version = "1", features = ["std"] }
 embassy-sync = "0.8"
