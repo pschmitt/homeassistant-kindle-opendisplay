@@ -99,11 +99,10 @@ ID normally includes the Kindle's device name.
 | Button | **Reboot into Inkwell** | Restart into Inkwell over BLE. |
 | Button | **Reboot into Kindle OS** | Boot Amazon's OS once over BLE. Its next normal reboot returns to Inkwell if the boot hook is enabled. |
 
-The extended battery and CPU readings, uptime, sleep history, the wake event,
-and brightness slider require the updated Rust receiver and BLE. The
-v0.7.0 receiver supports the earlier readings and controls. Build the
-ARMv7 receiver from the current checkout if your release predates these
-features.
+Use the v0.8.0 receiver or later for the extended battery and CPU readings,
+uptime, sleep history, wake event, and brightness slider. To upgrade an
+existing Inkwell installation, follow the
+[Kindle setup guide](opendisplay-ble.md#install-on-the-kindle).
 
 The contact timestamps retain their last reading during a connection loss.
 BLE controls require an awake Kindle. The wake event is based on the

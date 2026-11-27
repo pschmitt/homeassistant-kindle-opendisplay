@@ -40,8 +40,8 @@ full compressed image upload, and reconnect. The ext3 image build checks
 the filesystem and verifies that it contains the receiver and has no BLE
 identity or control key.
 
-On the tested Paperwhite 4, booting the image brought back USB and Wi-Fi
-SSH. OpenDisplay started before Inkwell Home, and all framebuffer pixels
-matched a fresh upload from Home Assistant. Restoring the previous
-`alpine.img` also booted and received a new frame. Keep a copy of your
-working image and its device-local data when installing a replacement.
+The v0.7.0 image and rollback were tested on the Paperwhite 4. The
+v0.8.0 image passed CI, and its Rust installer and boot hook were tested
+as an in-place upgrade on the device. See the
+[tested device notes](tested-device.md) for the results. Keep a copy of
+your working image and its device-local data when installing a replacement.

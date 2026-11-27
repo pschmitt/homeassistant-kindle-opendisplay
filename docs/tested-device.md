@@ -12,12 +12,15 @@
 
 Home Assistant sent a full image over native OpenDisplay and the Kindle
 confirmed the panel refresh. Battery telemetry and the frontlight, Wi-Fi,
-and Wi-Fi SSH controls were exercised over BLE. The post-installer's
-dependency and boot-hook setup ran in a staging directory on the same device.
-The diagnostic boot actions were tested with the reboot command mocked.
-The release image and rollback were also tested with actual reboots on
-this device. USB and Wi-Fi SSH recovered, and the release image received
-and rendered a fresh OpenDisplay frame with Inkwell Home absent.
+and Wi-Fi SSH controls were exercised over BLE. The diagnostic boot
+actions were tested with the reboot command mocked.
+
+The v0.7.0 image and its rollback were tested with physical reboots.
+The v0.8.0 Rust installer was tested as an in-place upgrade on the same
+device. It preserved the BLE identity, control key, and TOML settings.
+After reboot, both USB and Wi-Fi SSH returned, OpenDisplay owned the
+panel before Inkwell Home, the boot marker rearmed, and Home Assistant
+sent a fresh dashboard frame.
 
 A timed suspend resumed without a reboot, restarted BLE and restored the
 Wi-Fi lease. Home Assistant then delivered a fresh dashboard frame. The
