@@ -187,4 +187,6 @@ class KindleCoordinator(DataUpdateCoordinator[KindleState]):
                 )
                 self._wifi_connection_conflict = existing.id
             return
-        registry.async_update_device(device.id, merge_connections={connection})
+        registry.async_update_device(
+            device.id, new_connections=device.connections | {connection}
+        )
