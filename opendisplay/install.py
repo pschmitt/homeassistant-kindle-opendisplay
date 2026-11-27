@@ -7,8 +7,6 @@ import os
 import shutil
 import subprocess
 import sys
-import tarfile
-import venv
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -60,66 +58,6 @@ if [ -d /sys/class/power_supply/bd71827_bat ] && [ -f /opt/opendisplay/autostart
 fi
 
 """
-PACKAGES = (
-    "bumble==0.0.236",
-    "click",
-    "platformdirs",
-    "prompt_toolkit",
-    "pyee",
-    "pycparser",
-    "websockets",
-    "pyserial-asyncio",
-    "pyserial",
-    "libusb1",
-    "pyusb",
-    "typing-extensions",
-    "wcwidth",
-)
-
-
-def install_dependencies(stage):
-    """Stage Python wheels and Alpine's native Python modules."""
-    stage = stage.resolve()
-    venv.EnvBuilder(with_pip=True).create(stage / "venv")
-    deps = stage / "deps"
-    subprocess.run(
-        [
-            stage / "venv/bin/pip",
-            "install",
-            "--disable-pip-version-check",
-            "--only-binary=:all:",
-            "--no-deps",
-            "--target",
-            deps,
-            *PACKAGES,
-        ],
-        check=True,
-    )
-    subprocess.run(
-        ["apk", "fetch", "--output", stage, "py3-cryptography", "py3-cffi"],
-        check=True,
-    )
-    prefix = "usr/lib/python3.14/site-packages/"
-    for name in ("py3-cryptography", "py3-cffi"):
-        (package,) = stage.glob(f"{name}-*.apk")
-        with tarfile.open(package, ignore_zeros=True) as archive:
-            archive.extractall(
-                deps,
-                (item for item in archive if item.name.startswith(prefix)),
-                filter="data",
-            )
-    subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            (
-                "import bumble.transport, serial_asyncio; "
-                "from cryptography.hazmat.primitives.ciphers.aead import AESGCM"
-            ),
-        ],
-        env={**os.environ, "PYTHONPATH": f"{deps}:{deps / prefix}"},
-        check=True,
-    )
 
 
 def patch_init(init):
@@ -132,7 +70,9 @@ def patch_init(init):
     ).replace("[ -d /sys/class/power_supply/bd71827_bat ] && ", "")
     init = init.replace(PREVIOUS_HOOK, "").replace(legacy_hook, "")
     if "/opt/opendisplay/autostart" in init:
-        raise ValueError("This Inkwell init script has an unrecognized OpenDisplay hook.")
+        raise ValueError(
+            "This Inkwell init script has an unrecognized OpenDisplay hook."
+        )
     if init.count("\ncrashes=0\n") != 1:
         raise ValueError(
             "This Inkwell init script lacks the expected boot hook location."
@@ -158,42 +98,34 @@ def install(cpu_latency_us=None, receiver_binary=None):
     except ValueError as error:
         raise SystemExit(str(error)) from error
 
+    installed_binary = TARGET / "kindle-opendisplay"
+    if receiver_binary is None and not (
+        installed_binary.is_file() and os.access(installed_binary, os.X_OK)
+    ):
+        raise SystemExit("Supply the Rust ARMv7 binary with --receiver-binary.")
+
     TARGET.mkdir(exist_ok=True)
     with TemporaryDirectory(prefix=".install-", dir=TARGET) as directory:
         stage = Path(directory)
-        use_python = (
-            receiver_binary is None and not (TARGET / "kindle-opendisplay").is_file()
-        )
-        if use_python:
-            install_dependencies(stage)
         if receiver_binary is not None:
-            binary = stage / "kindle-opendisplay"
+            binary = stage / installed_binary.name
             shutil.copyfile(receiver_binary, binary)
             binary.chmod(0o755)
             subprocess.run([binary, "--version"], check=True)
-            binary.replace(TARGET / binary.name)
-        for name in (
-            "receiver.py",
-            "kindle_gatt.py",
+        files = (
             "settings.py",
             "provision.py",
             "launch.py",
             "sleep_cycle.py",
             "frontlight",
             "start",
-        ):
+        )
+        for name in files:
             shutil.copy2(SOURCE / name, stage / name)
+        if receiver_binary is not None:
+            binary.replace(installed_binary)
+        for name in files:
             (stage / name).replace(TARGET / name)
-        if use_python:
-            active_deps = TARGET / "deps"
-            if active_deps.exists():
-                active_deps.rename(stage / "previous-deps")
-            try:
-                (stage / "deps").rename(active_deps)
-            except OSError:
-                if (stage / "previous-deps").exists():
-                    (stage / "previous-deps").rename(active_deps)
-                raise
 
     config, key = provision(TARGET)
 
@@ -226,7 +158,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--receiver-binary",
         type=Path,
-        help="Install the built Kindle ARMv7 receiver in place of Python BLE dependencies.",
+        help="Path to the Rust ARMv7 receiver. Required if no receiver is installed.",
     )
     args = parser.parse_args()
     install(args.cpu_latency_us, args.receiver_binary)

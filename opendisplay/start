@@ -28,6 +28,12 @@ case "${1:-}" in
   *) printf '%s\n' 'Usage: start [--manual|--boot-exclusive]' >&2; exit 2 ;;
 esac
 
+if [ ! -x ./kindle-opendisplay ]
+then
+  printf '%s\n' 'Install the Rust ARMv7 receiver with install.py --receiver-binary.' >&2
+  exit 1
+fi
+
 mode_lock=/run/opendisplay-mode.lock
 mkdir "$mode_lock" || exit 1
 
@@ -61,7 +67,6 @@ stop_receiver() {
 trap 'reload=1; stop_receiver' HUP
 trap 'stop=1; stop_receiver' INT TERM
 
-export PYTHONPATH=/opt/opendisplay/deps:/opt/opendisplay/deps/usr/lib/python3.14/site-packages
 export PYTHONDONTWRITEBYTECODE=1
 
 while :
@@ -88,13 +93,7 @@ do
       ;;
     *) exit "$display_status" ;;
   esac
-  if [ -x ./kindle-opendisplay ]
-  then
-    set -- ./kindle-opendisplay
-  else
-    set -- python3 receiver.py
-  fi
-  python3 sleep_cycle.py "$@" kindle-pw4 device.json frame.bin --render &
+  python3 sleep_cycle.py ./kindle-opendisplay kindle-pw4 device.json frame.bin --render &
   child=$!
   if [ "$stop" -eq 1 ] || [ "$reload" -eq 1 ]
   then

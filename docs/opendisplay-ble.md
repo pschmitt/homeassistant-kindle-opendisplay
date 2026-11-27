@@ -14,8 +14,10 @@ the installer as root from that directory.
 python3 install.py --receiver-binary /path/to/kindle-opendisplay-armv7
 ```
 
-The installer keeps the BLE address, control key, and TOML settings if
-they already exist. On first launch it creates
+The installer requires the Rust binary for a new install or an upgrade
+from the legacy receiver. For subsequent helper-only updates it can reuse
+an installed Rust binary. It keeps the BLE address, control key, and TOML
+settings. On first launch it creates
 `/opt/opendisplay/device.json`, `control.key`, and `config.toml`.
 Pair the resulting device using the
 [Home Assistant guide](kindle-inkwell.md).
@@ -57,11 +59,3 @@ Use a 1072 × 1448 frame. The receiver writes
 The OpenDisplay temperature reads the i.MX chip temperature. The
 [hardware validation notes](tested-device.md) cover upload, boot, and
 rollback tests.
-
-## Legacy compatibility
-
-The repository still retains the Python BLE receiver as a fallback for
-post-installs that omit `--receiver-binary`. The ready-made image and the
-recommended post-install path use the Rust receiver. Both use the Python
-installer and launcher. Extended BLE diagnostics, wake events, and the
-brightness slider require the updated Rust receiver.
