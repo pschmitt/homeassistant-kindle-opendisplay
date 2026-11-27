@@ -18,6 +18,7 @@ const POWER: &str = "/sys/bus/platform/devices/bt_pwr_ctrl/btenable";
 const CLOCK: &str = "/proc/bluetooth/sleep/uart_clk";
 const WAKE: &str = "/proc/bluetooth/sleep/btwake";
 const LOCK: &str = "/run/opendisplay-ble.lock";
+const RADIO_DIRTY: &str = "/run/opendisplay-ble-needs-reset";
 
 pub struct Radio {
     _lock: File,
@@ -39,6 +40,12 @@ impl Radio {
         }
         let lock = OpenOptions::new().create(true).append(true).open(LOCK)?;
         lock.try_lock().map_err(io::Error::from)?;
+        if Path::new(RADIO_DIRTY).try_exists()? {
+            eprintln!("Resetting Bluetooth after an interrupted OpenDisplay receiver");
+            reset_radio()?;
+            fs::remove_file(RADIO_DIRTY)?;
+            thread::sleep(Duration::from_millis(500));
+        }
         let driver = Path::new(DRIVER);
         if fs::read_to_string(POWER)?.trim() != "disabled" || !driver.join(UART_DEVICE).exists() {
             return Err(io::Error::other(
@@ -49,6 +56,7 @@ impl Radio {
         latency.write_all(&cpu_latency_us.to_ne_bytes())?;
 
         // Construct the cleanup guard before changing any driver state.
+        File::create_new(RADIO_DIRTY)?;
         let radio = Self {
             _lock: lock,
             _latency: latency,
@@ -66,18 +74,25 @@ impl Radio {
 
 impl Drop for Radio {
     fn drop(&mut self) {
-        let driver = Path::new(DRIVER);
-        if !driver.join(UART_DEVICE).exists()
-            && let Err(error) = fs::write(driver.join("bind"), UART_DEVICE)
-        {
-            eprintln!("Could not restore the Bluetooth UART binding: {error}");
-        }
-        for (path, value) in [(WAKE, b"1\n"), (POWER, b"0\n"), (CLOCK, b"0\n")] {
-            if let Err(error) = fs::write(path, value) {
-                eprintln!("Could not restore {path}: {error}");
-            }
+        if let Err(error) = reset_radio().and_then(|()| fs::remove_file(RADIO_DIRTY)) {
+            eprintln!("Could not finish Bluetooth cleanup: {error}");
         }
     }
+}
+
+fn reset_radio() -> io::Result<()> {
+    let driver = Path::new(DRIVER);
+    let mut result = Ok(());
+    if !driver.join(UART_DEVICE).exists() {
+        result = fs::write(driver.join("bind"), UART_DEVICE);
+    }
+    for (path, value) in [(WAKE, b"1\n"), (POWER, b"0\n"), (CLOCK, b"0\n")] {
+        if let Err(error) = fs::write(path, value) {
+            eprintln!("Could not restore {path}: {error}");
+            result = Err(error);
+        }
+    }
+    result
 }
 
 /// Frames between flashing full refreshes; 1 flashes every frame, 0 only the first.

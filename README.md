@@ -13,7 +13,8 @@
   on wake. The bundled Inkwell image skips its own idle sleep when
   OpenDisplay is set to start at boot.
 - **Receiver recovery** restarts an exited boot receiver while keeping the
-  last frame visible.
+  last frame visible and resets Bluetooth if the old receiver could not
+  clean up.
 
 ## Install
 

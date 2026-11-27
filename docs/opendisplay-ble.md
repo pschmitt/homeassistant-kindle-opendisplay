@@ -71,7 +71,9 @@ Home Assistant frame after wake on the same boot.
 In boot-exclusive mode, the launcher keeps the last frame on the panel
 when the receiver exits and retries after two seconds. Repeated short
 runs increase the delay up to 30 seconds. Each new receiver initializes
-Bluetooth again. Stop the launcher to return to Inkwell Home.
+Bluetooth again. If the old receiver died before restoring the controller,
+the replacement resets the radio under the same controller lock before
+initializing it. Stop the launcher to return to Inkwell Home.
 
 ## Hardware notes
 
