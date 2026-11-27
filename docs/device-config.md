@@ -12,6 +12,7 @@ kill -HUP "$(cat /run/opendisplay.pid)"
 autostart = true
 opendisplay = true
 controls = true
+frontlight_double_tap = true
 battery_advertising = true
 cpu_latency_us = 0
 stay_awake_on_external_power = true
@@ -28,6 +29,7 @@ user = "nobody"
 | `autostart` | `true` | Boolean. Start the receiver at Inkwell boot. The launcher can still run manually. |
 | `opendisplay` | `true` | Boolean. Advertise OpenDisplay, accept images, and own the panel. Set to `false` for Inkwell Home with the other enabled BLE services. |
 | `controls` | `true` | Boolean. Serve authenticated controls and active telemetry over BLE. Command execution also requires this. |
+| `frontlight_double_tap` | `true` | Boolean. While OpenDisplay owns the panel and the Kindle is awake, double-tap the touchscreen to set the frontlight to 50% for 20 seconds. It then restores the previous level. A manual brightness change cancels the boost. |
 | `battery_advertising` | `true` | Boolean. Broadcast battery percentage and charging state in BTHome advertisements. The broadcast is visible to nearby scanners. |
 | `cpu_latency_us` | `0` | Integer, `0` or `50` microseconds. Limits CPU idle latency while the radio runs. Change it only when testing the latency and power tradeoff. |
 | `stay_awake_on_external_power` | `true` | Boolean. Defer timed sleep on USB or a charger. Also inhibits automatic idle sleep in the patched Inkwell Home. |

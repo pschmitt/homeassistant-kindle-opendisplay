@@ -41,6 +41,14 @@ share the same Rust telemetry code.
 See [Device configuration](device-config.md) for every TOML key, default,
 and accepted value.
 
+### Frontlight double-tap
+
+While the Kindle is awake and OpenDisplay owns its screen, double-tap
+the touchscreen to set the light to 50% for 20 seconds. Another double-tap
+extends the timer. The previous brightness returns when the timer ends.
+A manual brightness change takes over immediately. The boost leaves the
+saved reboot brightness alone.
+
 ### Timed sleep
 
 For a five-minute idle and five-minute sleep cycle, set both sleep values

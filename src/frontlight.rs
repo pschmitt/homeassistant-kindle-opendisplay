@@ -8,11 +8,15 @@ use std::{fs, io::Write as _, path::Path};
 const BACKLIGHT: &str = "/sys/class/backlight/bl";
 const SAVED_LEVEL: &str = "/opt/opendisplay/frontlight-level";
 const ACTIVE_LEVEL: &str = "/opt/opendisplay/frontlight-active-level";
+const BOOST_STATE: &str = "/run/opendisplay-frontlight-boost";
+const LOCK: &str = "/run/opendisplay-frontlight.lock";
 
 struct Frontlight<'a> {
     directory: &'a Path,
     saved: &'a Path,
     active: &'a Path,
+    boost: &'a Path,
+    lock: &'a Path,
 }
 
 impl Frontlight<'_> {
@@ -63,7 +67,48 @@ impl Frontlight<'_> {
         Ok(())
     }
 
-    fn set(&self, requested: u32, current: u32) -> Result<()> {
+    fn lock(&self) -> Result<fs::File> {
+        let lock = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(self.lock)?;
+        lock.lock()?;
+        Ok(lock)
+    }
+
+    fn cancel_boost(&self) -> Result<()> {
+        let text = match fs::read_to_string(self.boost) {
+            Ok(text) => text,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => return Err(error.into()),
+        };
+        let (previous, applied) = text.split_once(' ').context("invalid frontlight boost")?;
+        if self.read_level("brightness")? == applied.trim().parse::<u32>()? {
+            self.apply(previous.parse()?)?;
+        }
+        fs::remove_file(self.boost)?;
+        Ok(())
+    }
+
+    fn start_boost(&self) -> Result<()> {
+        let _lock = self.lock()?;
+        if self.boost.is_file() {
+            return Ok(());
+        }
+        let previous = self.read_level("brightness")?;
+        let level = self.read_level("max_brightness")?.div_ceil(2);
+        fs::write(self.boost, format!("{previous} {level}\n"))?;
+        if let Err(error) = self.apply(level) {
+            fs::remove_file(self.boost)?;
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn set(&self, requested: u32) -> Result<()> {
+        let _lock = self.lock()?;
+        self.cancel_boost()?;
+        let current = self.read_level("brightness")?;
         if requested == 0 && current > 0 {
             self.save(current)?;
         }
@@ -74,7 +119,10 @@ impl Frontlight<'_> {
         self.remember_active(requested)
     }
 
-    fn toggle(&self, enabled: bool, current: u32) -> Result<()> {
+    fn toggle(&self, enabled: bool) -> Result<()> {
+        let _lock = self.lock()?;
+        self.cancel_boost()?;
+        let current = self.read_level("brightness")?;
         let mut applied = current;
         if enabled && current == 0 {
             let level = match fs::read_to_string(self.saved) {
@@ -103,26 +151,63 @@ fn device() -> Frontlight<'static> {
         directory: Path::new(BACKLIGHT),
         saved: Path::new(SAVED_LEVEL),
         active: Path::new(ACTIVE_LEVEL),
+        boost: Path::new(BOOST_STATE),
+        lock: Path::new(LOCK),
     }
 }
 
 pub fn restore() -> Result<()> {
-    device().restore()
+    let light = device();
+    let _lock = light.lock()?;
+    light.cancel_boost()?;
+    light.restore()
+}
+
+pub struct Boost {
+    _wake_lock: fs::File,
+}
+
+impl Boost {
+    pub fn begin() -> Result<Self> {
+        let wake_lock = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(crate::sleep::SESSION_LOCK)?;
+        wake_lock
+            .try_lock_shared()
+            .context("Kindle is preparing to suspend")?;
+        device().start_boost()?;
+        Ok(Self {
+            _wake_lock: wake_lock,
+        })
+    }
+
+    pub fn renew(&self) -> Result<()> {
+        device().start_boost()
+    }
+}
+
+impl Drop for Boost {
+    fn drop(&mut self) {
+        let light = device();
+        if let Err(error) = light.lock().and_then(|_lock| light.cancel_boost()) {
+            eprintln!("Restore frontlight after double-tap: {error:#}");
+        }
+    }
 }
 
 pub fn set(level: u16) -> Result<()> {
     let light = device();
-    let current = light.read_level("brightness")?;
     ensure!(
         u32::from(level) <= light.read_level("max_brightness")?,
         "invalid brightness"
     );
-    light.set(level.into(), current)
+    light.set(level.into())
 }
 
 pub fn toggle(enabled: bool) -> Result<()> {
     let light = device();
-    light.toggle(enabled, light.read_level("brightness")?)
+    light.toggle(enabled)
 }
 
 pub async fn forced_command() -> Result<i32> {
@@ -131,7 +216,7 @@ pub async fn forced_command() -> Result<i32> {
     let command = std::env::var("SSH_ORIGINAL_COMMAND").unwrap_or_default();
     match command.as_str() {
         "status" => println!("{}", if current > 0 { "ON" } else { "OFF" }),
-        "on" | "off" => light.toggle(command == "on", current)?,
+        "on" | "off" => light.toggle(command == "on")?,
         "battery" => {
             let battery = advertising::battery().context("read battery state")?;
             ensure!(
@@ -166,7 +251,7 @@ pub async fn forced_command() -> Result<i32> {
                 if level > light.read_level("max_brightness")? {
                     return Ok(2);
                 }
-                light.set(level, current)?;
+                light.set(level)?;
             } else {
                 eprintln!("Expected Kindle command: on, off, level, status, battery, or info");
                 return Ok(2);
@@ -188,29 +273,48 @@ mod tests {
         fs::write(path.join("max_brightness"), "300\n")?;
         let saved = path.join("saved");
         let active = path.join("active");
+        let boost = path.join("boost");
+        let lock = path.join("lock");
         let light = Frontlight {
             directory: path,
             saved: &saved,
             active: &active,
+            boost: &boost,
+            lock: &lock,
         };
         light.restore()?;
         assert_eq!(light.read_level("brightness")?, 150);
-        light.toggle(false, 150)?;
+        light.toggle(false)?;
         assert_eq!(light.read_level("brightness")?, 0);
-        light.toggle(true, 0)?;
+        light.toggle(true)?;
         assert_eq!(light.read_level("brightness")?, 150);
-        light.set(200, 150)?;
+        light.set(200)?;
         assert_eq!(fs::read_to_string(&saved)?, "200\n");
-        light.set(0, 200)?;
+        light.set(0)?;
         assert_eq!(light.read_level("brightness")?, 0);
         assert_eq!(fs::read_to_string(&saved)?, "200\n");
         fs::write(path.join("brightness"), "75\n")?;
         light.restore()?;
         assert_eq!(light.read_level("brightness")?, 0);
-        light.toggle(true, 0)?;
+        light.toggle(true)?;
         fs::write(path.join("brightness"), "75\n")?;
         light.restore()?;
         assert_eq!(light.read_level("brightness")?, 200);
+        light.set(0)?;
+        light.start_boost()?;
+        assert_eq!(light.read_level("brightness")?, 150);
+        assert_eq!(fs::read_to_string(&active)?, "0\n");
+        light.cancel_boost()?;
+        assert_eq!(light.read_level("brightness")?, 0);
+        light.start_boost()?;
+        light.toggle(false)?;
+        light.cancel_boost()?;
+        light.toggle(true)?;
+        assert_eq!(light.read_level("brightness")?, 200);
+        light.start_boost()?;
+        light.set(120)?;
+        light.cancel_boost()?;
+        assert_eq!(light.read_level("brightness")?, 120);
         Ok(())
     }
 }

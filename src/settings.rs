@@ -9,6 +9,7 @@ pub const PREVENT_SLEEP: &str = "/opt/opendisplay/prevent-sleep";
 pub struct Settings {
     pub autostart: bool,
     pub controls: bool,
+    pub frontlight_double_tap: bool,
     pub opendisplay: bool,
     pub battery_advertising: bool,
     pub stay_awake_on_external_power: bool,
@@ -39,6 +40,7 @@ impl Default for Settings {
         Self {
             autostart: true,
             controls: true,
+            frontlight_double_tap: true,
             opendisplay: true,
             battery_advertising: true,
             stay_awake_on_external_power: true,

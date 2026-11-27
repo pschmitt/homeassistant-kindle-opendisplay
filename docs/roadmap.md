@@ -21,10 +21,3 @@
   trial the new binary on the Kindle. Confirm it after BLE reconnect.
 - [ ] Evaluate full Inkwell image updates separately. They replace the
   root filesystem and need a boot and rollback strategy of their own.
-
-## Frontlight gesture
-
-- [ ] While OpenDisplay owns the panel, let a touchscreen double-tap set
-  the frontlight to 50% for 20 seconds. Restore the previous brightness
-  afterward without changing the brightness saved for the next boot.
-  A manual brightness change should cancel the temporary boost.

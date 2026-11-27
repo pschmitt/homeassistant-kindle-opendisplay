@@ -6,6 +6,7 @@ mod launcher;
 mod settings;
 mod setup;
 mod sleep;
+mod touch;
 mod update;
 
 use actions::Actions;
@@ -361,6 +362,7 @@ async fn serve(
     tokio::select! {
         result = runner.run() => result.map_err(|e| anyhow::anyhow!("Bluetooth HCI: {e:?}")),
         result = gatt => result,
+        _ = touch::listen(config.on_device && config.render && config.settings.opendisplay && config.settings.frontlight_double_tap) => Ok(()),
         _ = term.recv() => Ok(()),
         result = tokio::signal::ctrl_c() => result.context("wait for interrupt"),
     }
