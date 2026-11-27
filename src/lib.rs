@@ -69,7 +69,7 @@ impl Connection {
         let reject = || vec![Event::Notify(vec![0xff, *opcode, 0, 0])];
         match (*namespace, *opcode, data) {
             (0, 0x40, []) => configuration_packets(payload_limit),
-            (0, 0x43, []) => vec![Event::Notify(b"\x00\x43\x01\x00\x070000000".to_vec())],
+            (0, 0x43, []) => vec![Event::Notify(firmware_version_packet())],
             (0, 0x44, []) => {
                 let mut response = vec![0; 18];
                 response[..4].copy_from_slice(&[0, 0x44, 0x46, 0x24]);
@@ -114,6 +114,20 @@ impl Connection {
 
 pub fn render_status(success: bool) -> [u8; 2] {
     [0, if success { 0x73 } else { 0x74 }]
+}
+
+fn firmware_version_packet() -> Vec<u8> {
+    let byte = |value: &str| value.parse::<u8>().unwrap_or_default();
+    let mut packet = vec![
+        0,
+        0x43,
+        byte(env!("CARGO_PKG_VERSION_MAJOR")),
+        byte(env!("CARGO_PKG_VERSION_MINOR")),
+        7,
+    ];
+    packet.extend(b"0000000");
+    packet.push(byte(env!("CARGO_PKG_VERSION_PATCH")));
+    packet
 }
 
 fn configuration_packets(payload_limit: usize) -> Vec<Event> {
@@ -174,6 +188,21 @@ mod tests {
     fn start_compressed(connection: &mut Connection) {
         let start = [vec![0, 0x70], (FRAME_BYTES as u32).to_le_bytes().to_vec()].concat();
         notify(&connection.receive(&start, 20, 130), &[0, 0x70]);
+    }
+
+    #[test]
+    fn firmware_reply_reports_the_release_version_including_patch() {
+        let mut connection = Connection::default();
+        let events = connection.receive(&[0, 0x43], 20, 130);
+        let [Event::Notify(packet)] = events.as_slice() else {
+            panic!("expected one firmware reply");
+        };
+        let major: u8 = env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap();
+        let minor: u8 = env!("CARGO_PKG_VERSION_MINOR").parse().unwrap();
+        let patch: u8 = env!("CARGO_PKG_VERSION_PATCH").parse().unwrap();
+        assert_eq!(&packet[..5], &[0, 0x43, major, minor, 7]);
+        assert_eq!(&packet[5..12], b"0000000");
+        assert_eq!(packet[12], patch);
     }
 
     #[test]

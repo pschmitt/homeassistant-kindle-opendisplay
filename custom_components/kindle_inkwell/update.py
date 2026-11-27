@@ -12,6 +12,7 @@ from homeassistant.components.update import (
     UpdateEntityFeature,
 )
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import KindleError, KindleLinkError, KindleTelemetryUnsupported
@@ -106,6 +107,7 @@ class KindleReceiverUpdate(UpdateEntity):
         self._next_poll = monotonic() + _POLL_SECONDS
         self._attr_installed_version = installed
         self._attr_available = True
+        self._update_device_info(installed)
         session = async_get_clientsession(self.hass)
         try:
             async with session.get(_RELEASE, timeout=ClientTimeout(total=12)) as reply:
@@ -125,6 +127,59 @@ class KindleReceiverUpdate(UpdateEntity):
             if candidate
             else None
         )
+
+    def _update_device_info(self, version):
+        """Keep matching device records in sync with the authenticated release."""
+        coordinator = self.coordinator
+        entry = coordinator.config_entry
+        registry = dr.async_get(self.hass)
+        identifiers = coordinator.device_info["identifiers"]
+        firmware = (
+            coordinator.data.firmware if coordinator.data else None
+        ) or entry.data.get("firmware")
+        software = f"OpenDisplay {version}"
+        if firmware:
+            software = f"Kindle OS {firmware} · {software}"
+        if hasattr(registry, "async_get_device_by_identifier"):
+            kindle = registry.async_get_device_by_identifier(
+                next(iter(identifiers)), entry.entry_id
+            )
+        else:
+            kindle = registry.async_get_device(identifiers=identifiers)
+        if kindle is not None and kindle.sw_version != software:
+            registry.async_update_device(kindle.id, sw_version=software)
+
+        address = coordinator.address
+        if not address:
+            return
+        connection = (dr.CONNECTION_BLUETOOTH, address.upper())
+        for native_entry in self.hass.config_entries.async_entries("opendisplay"):
+            native_address = native_entry.unique_id
+            if not native_address or native_address.upper() != address.upper():
+                continue
+            if hasattr(registry, "async_get_device_by_connection"):
+                device = registry.async_get_device_by_connection(
+                    connection, native_entry.entry_id
+                )
+            else:
+                device = registry.async_get_device(connections={connection})
+            if device is None or native_entry.entry_id not in device.config_entries:
+                continue
+            if kindle is not None and device.id == kindle.id:
+                continue
+            hardware = entry.data["model"]
+            if (device.manufacturer, device.hw_version, device.sw_version) != (
+                "Amazon",
+                hardware,
+                version,
+            ):
+                registry.async_update_device(
+                    device.id,
+                    manufacturer="Amazon",
+                    hw_version=hardware,
+                    sw_version=version,
+                )
+            break
 
     async def async_install(self, version, backup, **kwargs):
         """Stage the update and confirm it after authenticated BLE reconnect."""
@@ -172,6 +227,7 @@ class KindleReceiverUpdate(UpdateEntity):
                                     "Kindle did not confirm the new receiver"
                                 )
                         self._attr_installed_version = target
+                        self._update_device_info(target)
                         break
                     except KindleLinkError:
                         continue

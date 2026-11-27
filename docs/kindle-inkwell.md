@@ -117,6 +117,10 @@ Install v0.9.2 once using the [Kindle setup guide](opendisplay-ble.md#install-on
 to enable updates. The **OpenDisplay receiver** update entity compares the
 installed version over authenticated BLE with stable GitHub releases.
 
+The Kindle Inkwell device info shows both Kindle OS and the OpenDisplay
+receiver version. The matching native OpenDisplay device shows the
+receiver version with the Kindle's manufacturer and hardware model.
+
 Connect the Kindle to power and Wi-Fi before pressing **Install**. The
 Kindle downloads the ARMv7 binary over HTTPS and verifies the release
 checksum. BLE and display uploads briefly pause while the receiver

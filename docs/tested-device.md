@@ -27,6 +27,11 @@ subsequent in-place upgrade. After reboot, USB and Wi-Fi SSH returned,
 the Rust launcher owned the panel, and Home Assistant sent a fresh frame.
 The legacy frontlight status, battery, and info commands still worked.
 
+Home Assistant installed the published v0.9.2 ARMv7 asset over Wi-Fi
+and confirmed it over BLE. The Kindle stayed on the same system boot,
+and its BLE identity, control key, and config were unchanged. The
+frontlight also restored its previous level after a separate reboot.
+
 A timed suspend resumed without a reboot, restarted BLE and restored the
 Wi-Fi lease. Home Assistant then delivered a fresh dashboard frame. The
 frontlight slider was verified against the driver's actual brightness.
