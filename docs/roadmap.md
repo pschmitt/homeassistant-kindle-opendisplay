@@ -8,7 +8,7 @@
   build outputs for host tests and target binaries.
 - [x] Onboard the flake into Circus once the receiver package and checks
   exist. Publish reproducible ARMv7 artifacts from successful builds.
-- [ ] Build ready-made Inkwell images with Nix. Pin upstream Inkwell, apply
+- [x] Build ready-made Inkwell images with Nix. Pin upstream Inkwell, apply
   the receiver and startup hook as a reproducible overlay or patch, and
   keep per-device keys and configuration outside the image. Validate boot,
   rollback, and Home Assistant compatibility on a Paperwhite 4 before

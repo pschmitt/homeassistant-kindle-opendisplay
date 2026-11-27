@@ -59,9 +59,10 @@ user = "nobody"
   ownership. Turn it off to return the panel to Inkwell Home while keeping
   the optional battery broadcast and authenticated Kindle controls.
 - `battery_advertising` enables passive BTHome battery and charging data.
-- `stay_awake_on_external_power` skips the idle sleep screen and suspend on
-  USB or a wall charger in the patched Inkwell image. The power button still
-  initiates sleep and battery-powered idle follows Inkwell's usual policy.
+- When Inkwell Home owns the panel, `stay_awake_on_external_power` skips its
+  idle sleep screen and suspend on USB or a wall charger. Home still handles
+  manual sleep and battery-powered idle. OpenDisplay mode keeps the BLE
+  receiver awake for incoming frames.
 - `cpu_latency_us` accepts `0` or `50`. See the suspend notes below.
 - `commands` enables the BLE command action and selects a local non-root
   Unix account. The account's primary group must also be non-root.

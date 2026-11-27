@@ -14,7 +14,10 @@ Home Assistant sent a full image over native OpenDisplay and the Kindle
 confirmed the panel refresh. Battery telemetry and the frontlight, Wi-Fi,
 and Wi-Fi SSH controls were exercised over BLE. The post-installer's
 dependency and boot-hook setup ran in a staging directory on the same device.
-The boot targets were tested with the actual reboot command mocked.
+The diagnostic boot actions were tested with the reboot command mocked.
+The release image and rollback were also tested with actual reboots on
+this device. USB and Wi-Fi SSH recovered, and the release image received
+and rendered a fresh OpenDisplay frame with Inkwell Home absent.
 
 The receiver uses the Paperwhite 4 framebuffer and UART layout. The
 controller initialization and power findings are in the
