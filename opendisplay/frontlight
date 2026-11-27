@@ -63,7 +63,16 @@ case "${SSH_ORIGINAL_COMMAND:-}" in
     then
       charging=true
     fi
-    printf '{"capacity":%s,"status":"%s","charging":%s}\n' "$capacity" "$status" "$charging"
+    plugged_in=null
+    if [ -r /sys/class/power_supply/bd71827_ac/online ]
+    then
+      read -r online < /sys/class/power_supply/bd71827_ac/online
+      case "$online" in
+        0) plugged_in=false ;;
+        1) plugged_in=true ;;
+      esac
+    fi
+    printf '{"capacity":%s,"status":"%s","charging":%s,"plugged_in":%s}\n' "$capacity" "$status" "$charging" "$plugged_in"
     ;;
   info)
     exec python3 - <<'PY'

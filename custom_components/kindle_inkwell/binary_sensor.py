@@ -9,8 +9,13 @@ from .entity import KindleEntity
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    """Add the charging sensor."""
-    async_add_entities((KindleCharging(entry.runtime_data, "charging"),))
+    """Add the charging and external power sensors."""
+    async_add_entities(
+        (
+            KindleCharging(entry.runtime_data, "charging"),
+            KindlePluggedIn(entry.runtime_data, "plugged_in"),
+        )
+    )
 
 
 class KindleCharging(KindleEntity, BinarySensorEntity):
@@ -35,3 +40,19 @@ class KindleCharging(KindleEntity, BinarySensorEntity):
             return charging
         if state := self.coordinator.data:
             return state.charging
+
+
+class KindlePluggedIn(KindleEntity, BinarySensorEntity):
+    """External power is connected."""
+
+    _attr_device_class = BinarySensorDeviceClass.PLUG
+
+    @property
+    def available(self):
+        """Older receivers may lack the external power field."""
+        return super().available and self.is_on is not None
+
+    @property
+    def is_on(self):
+        if state := self.coordinator.data:
+            return state.plugged_in

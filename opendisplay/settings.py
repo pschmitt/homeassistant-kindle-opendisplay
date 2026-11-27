@@ -16,6 +16,7 @@ CONFIG_NAME = "config.toml"
 class Settings:
     opendisplay: bool = True
     battery_advertising: bool = True
+    stay_awake_on_external_power: bool = True
     cpu_latency_us: int = 0
     commands_enabled: bool = False
     command_user: str = "nobody"
@@ -46,6 +47,7 @@ def load_settings(directory):
         "controls",
         "opendisplay",
         "battery_advertising",
+        "stay_awake_on_external_power",
         "cpu_latency_us",
         "commands",
     }:
@@ -57,12 +59,13 @@ def load_settings(directory):
     controls = config.get("controls", True)
     display = config.get("opendisplay", True)
     battery = config.get("battery_advertising", True)
+    awake = config.get("stay_awake_on_external_power", True)
     enabled = commands.get("enabled", False)
     latency = config.get("cpu_latency_us", 0)
     user = commands.get("user", "nobody")
     if any(
         type(value) is not bool
-        for value in (autostart, controls, display, battery, enabled)
+        for value in (autostart, controls, display, battery, enabled, awake)
     ):
         raise ValueError("OpenDisplay feature settings must be true or false")
     if type(latency) is not int or latency not in (0, 50):
@@ -79,6 +82,7 @@ def load_settings(directory):
     return Settings(
         opendisplay=display,
         battery_advertising=battery,
+        stay_awake_on_external_power=awake,
         cpu_latency_us=latency,
         commands_enabled=enabled,
         command_user=user,
@@ -100,6 +104,7 @@ def install_settings(directory, latency=None):
         f"controls = {str(current.controls).lower()}\n"
         f"opendisplay = {str(current.opendisplay).lower()}\n"
         f"battery_advertising = {str(current.battery_advertising).lower()}\n"
+        f"stay_awake_on_external_power = {str(current.stay_awake_on_external_power).lower()}\n"
         f"cpu_latency_us = {idle_limit}\n\n"
         "[commands]\n"
         f"enabled = {str(current.commands_enabled).lower()}\n"
@@ -117,7 +122,9 @@ def install_settings(directory, latency=None):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("feature", choices=("autostart", "opendisplay"))
+    parser.add_argument(
+        "feature", choices=("autostart", "opendisplay", "stay_awake_on_external_power")
+    )
     args = parser.parse_args()
     try:
         enabled = getattr(load_settings(Path(__file__).resolve().parent), args.feature)

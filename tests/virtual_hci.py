@@ -161,13 +161,14 @@ async def authenticated_control(peer):
         assert result == {"error": "disabled"}
     await expect_denied(peer.write_value(request, packet, with_response=True))
 
-    nonce = await peer.read_value(challenge)
-    header = CONTEXT + nonce + b"\xc0"
-    packet = b"\xc0" + hmac.digest(KEY, b"request\0" + header, "sha256")[:16]
-    await peer.write_value(request, packet, with_response=True)
-    sealed = await peer.read_value(response)
-    # This transport intentionally has no Paperwhite sensors.
-    assert AESGCM(key).decrypt(nonce[:12], sealed, header) == b"null"
+    for operation in (b"\xc0", b"\xe0"):
+        nonce = await peer.read_value(challenge)
+        header = CONTEXT + nonce + operation
+        packet = operation + hmac.digest(KEY, b"request\0" + header, "sha256")[:16]
+        await peer.write_value(request, packet, with_response=True)
+        sealed = await peer.read_value(response)
+        # This transport intentionally has no Paperwhite sensors.
+        assert AESGCM(key).decrypt(nonce[:12], sealed, header) == b"null"
 
 
 async def main():

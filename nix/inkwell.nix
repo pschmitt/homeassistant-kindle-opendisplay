@@ -30,6 +30,7 @@ pkgs.stdenvNoCC.mkDerivation {
   pname = "inkwell-paperwhite4-opendisplay";
   version = "1";
   src = upstream;
+  patches = [ ./inkwell-external-power.patch ];
   nativeBuildInputs = [
     pkgs.binutils
     pkgs.cmake

@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Port the Kindle-side receiver to Rust. Keep the Python implementation
+- [x] Port the Kindle-side receiver to Rust. Keep the Python implementation
   as a reference for BLE wire compatibility, PW4 UART bring-up, and
   framebuffer refresh. Verify the Rust receiver on the Paperwhite 4.
 - [x] Build the Rust receiver with Nix and [Crane](https://github.com/ipetkov/crane).

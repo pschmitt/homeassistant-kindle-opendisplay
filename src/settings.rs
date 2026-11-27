@@ -9,6 +9,7 @@ pub struct Settings {
     pub controls: bool,
     pub opendisplay: bool,
     pub battery_advertising: bool,
+    pub stay_awake_on_external_power: bool,
     pub cpu_latency_us: i32,
     pub commands: Commands,
 }
@@ -36,6 +37,7 @@ impl Default for Settings {
             controls: true,
             opendisplay: true,
             battery_advertising: true,
+            stay_awake_on_external_power: true,
             cpu_latency_us: 0,
             commands: Commands::default(),
         }

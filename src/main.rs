@@ -129,6 +129,12 @@ async fn main() -> Result<()> {
         println!("kindle-opendisplay {}", env!("CARGO_PKG_VERSION"));
         return Ok(());
     }
+    if args.peek().is_some_and(|arg| arg == "--idle-inhibited") {
+        let settings = Settings::load(Path::new("/opt/opendisplay"))?;
+        let inhibited =
+            settings.stay_awake_on_external_power && advertising::external_power() == Some(true);
+        std::process::exit(if inhibited { 0 } else { 1 });
+    }
     let (Some(transport), Some(identity), Some(output)) = (args.next(), args.next(), args.next())
     else {
         bail!(

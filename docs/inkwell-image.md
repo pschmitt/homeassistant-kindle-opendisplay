@@ -19,7 +19,9 @@ nix build '.#inkwell-pw4'
 receiver and its startup hook. The first run generates the BLE identity
 and shared control key and writes the default TOML settings inside the Inkwell filesystem. Add your own Wi-Fi
 and SSH configuration using the upstream instructions. Device keys,
-addresses, and user configuration belong on the Kindle.
+addresses, and user configuration belong on the Kindle. On external power,
+the image skips automatic idle sleep by default. Edit
+`stay_awake_on_external_power` in `/opt/opendisplay/config.toml` to change it.
 
 For an existing installation, build just the receiver with
 `nix build '.#kindle-armv7'`. Copy the binary to the device and use

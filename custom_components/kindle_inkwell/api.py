@@ -49,6 +49,7 @@ class KindleState:
     ssid: str | None = None
     bssid: str | None = None
     ip_address: str | None = None
+    plugged_in: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -132,6 +133,7 @@ class KindleClient:
                 device.get("kernel_release"),
                 device.get("alpine_version"),
                 ip_address=device.get("ip_address"),
+                plugged_in=charge.get("plugged_in"),
             )
         except (ValueError, KeyError, TypeError, AttributeError) as err:
             raise KindleError("Kindle returned invalid telemetry") from err
@@ -160,10 +162,19 @@ class KindleBleClient:
         self.key = key
         self.lock = asyncio.Lock()
         self._extended = None
+        self._power_telemetry = None
 
     async def read(self):
         """Return current telemetry."""
         async with self.lock:
+            if self._power_telemetry is not False:
+                try:
+                    state = await self._exchange(0, extended=True, power=True)
+                except KindleTelemetryUnsupported:
+                    self._power_telemetry = False
+                else:
+                    self._power_telemetry = self._extended = True
+                    return state
             if self._extended is not False:
                 try:
                     state = await self._exchange(0, extended=True)
@@ -179,10 +190,18 @@ class KindleBleClient:
         opcode = _OPERATIONS[control][enabled]
         async with self.lock:
             try:
-                return await self._exchange(opcode, extended=self._extended is True)
+                return await self._exchange(
+                    opcode,
+                    extended=self._extended is True,
+                    power=self._power_telemetry is True,
+                )
             except KindleLinkError:
                 await asyncio.sleep(2)
-                return await self._exchange(opcode, extended=self._extended is True)
+                return await self._exchange(
+                    opcode,
+                    extended=self._extended is True,
+                    power=self._power_telemetry is True,
+                )
 
     async def reboot(self, *, stock):
         """Request a single reboot and await authenticated acknowledgement."""
@@ -197,7 +216,7 @@ class KindleBleClient:
         async with self.lock:
             return await self._exchange(9, command=payload)
 
-    async def _exchange(self, opcode, *, extended=False, command=None):
+    async def _exchange(self, opcode, *, extended=False, power=False, command=None):
         from bleak.exc import BleakError
         from bleak_retry_connector import (
             BleakClientWithServiceCache,
@@ -234,7 +253,8 @@ class KindleBleClient:
                     nonce = await client.read_gatt_char(_CHALLENGE)
                     if len(nonce) != 16:
                         raise KindleError("Invalid Kindle challenge")
-                    operation = bytes((opcode | (0xC0 if extended else 0x80),))
+                    flags = 0xE0 if power else 0xC0 if extended else 0x80
+                    operation = bytes((opcode | flags,))
                     header = b"kindle-control-v1\0" + nonce + operation
                     if command is None:
                         payload = hmac.digest(
@@ -279,7 +299,10 @@ class KindleBleClient:
                 return fields
             if fields is None and extended and opcode == 0:
                 raise KindleTelemetryUnsupported("Extended telemetry is unavailable")
-            if not isinstance(fields, list) or len(fields) != (16 if extended else 15):
+            expected = 17 if power else 16 if extended else 15
+            if not isinstance(fields, list) or len(fields) != expected:
+                raise ValueError
+            if power and fields[-1] is not None and type(fields[-1]) is not bool:
                 raise ValueError
             return KindleState(*fields)
         except (ValueError, TypeError, KeyError, AttributeError) as err:

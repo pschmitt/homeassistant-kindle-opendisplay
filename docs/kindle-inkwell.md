@@ -45,7 +45,9 @@ The existing **Battery** and **Charging** entities use the announced readings
 when available. Older receivers still provide readings through the
 authenticated connection. The two advertised values are visible to nearby
 BLE scanners. SSID, BSSID, the current Wi-Fi IPv4 address, and control commands use the
-authenticated connection. The IP address is unknown while Wi-Fi is
+authenticated connection. **Plugged in** reports whether USB or a charger
+supplies power, even at 100% when **Charging** is off. Update the Kindle
+receiver to enable this sensor. The IP address is unknown while Wi-Fi is
 disconnected.
 
 The standalone Home Assistant BTHome entry is optional and creates an

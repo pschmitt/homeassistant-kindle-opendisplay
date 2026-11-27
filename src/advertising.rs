@@ -23,6 +23,17 @@ pub fn temperature() -> u8 {
         })
 }
 
+pub fn external_power() -> Option<bool> {
+    match fs::read_to_string("/sys/class/power_supply/bd71827_ac/online")
+        .ok()?
+        .trim()
+    {
+        "0" => Some(false),
+        "1" => Some(true),
+        _ => None,
+    }
+}
+
 pub struct Battery {
     pub capacity: u8,
     pub status: String,
@@ -38,8 +49,7 @@ pub fn battery() -> Option<Battery> {
         Ok(status) => status.trim().to_owned(),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             let charging = fs::read_to_string(path.join("charging")).ok()?;
-            let online = fs::read_to_string("/sys/class/power_supply/bd71827_ac/online")
-                .is_ok_and(|online| online.trim() == "1");
+            let online = external_power() == Some(true);
             if charging.trim() == "1" {
                 "Charging"
             } else if online && capacity == 100 {

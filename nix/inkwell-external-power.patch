@@ -1,0 +1,20 @@
+--- a/src/ui/sleep.h
++++ b/src/ui/sleep.h
+@@ -121 +121,16 @@
+-__attribute__((constructor)) static void sleep_install(void) { idle_hook = sleep_now; }
++/* Keep the displayed page and radios available on USB or a wall charger.
++ * The physical power button still calls sleep_now directly. */
++static void idle_sleep(void) {
++    pid_t pid = fork();
++    if (pid == 0) {
++        execl("/opt/opendisplay/kindle-opendisplay", "kindle-opendisplay",
++              "--idle-inhibited", (char *)0);
++        _exit(127);
++    }
++    int status = 0;
++    if (pid > 0 && waitpid(pid, &status, 0) == pid &&
++        WIFEXITED(status) && WEXITSTATUS(status) == 0) return;
++    sleep_now();
++}
++
++__attribute__((constructor)) static void sleep_install(void) { idle_hook = idle_sleep; }

@@ -52,6 +52,14 @@ async def command(*args, action=""):
     return stdout.decode().strip()
 
 
+def plugged_in():
+    try:
+        value = Path("/sys/class/power_supply/bd71827_ac/online").read_text().strip()
+    except OSError:
+        return None
+    return {"0": False, "1": True}.get(value)
+
+
 async def telemetry():
     light, battery, info, ssh = await asyncio.gather(
         *(
@@ -79,6 +87,7 @@ async def telemetry():
         device.get("ssid") if wifi_enabled else None,
         device.get("bssid") if wifi_enabled else None,
         device.get("ip_address") if wifi_enabled else None,
+        plugged_in(),
     ]
 
 
@@ -243,8 +252,9 @@ def add_kindle_service(device, key, *, settings=DEFAULT_SETTINGS):
             raise ATT_Error(ATT_INSUFFICIENT_AUTHORIZATION_ERROR)
         encrypted = bool(packet[0] & 0x80)
         extended = encrypted and bool(packet[0] & 0x40)
+        power = extended and bool(packet[0] & 0x20)
         try:
-            opcode = packet[0] & (0x3F if extended else 0x7F)
+            opcode = packet[0] & (0x1F if extended else 0x7F)
             if opcode in (7, 8):
                 if not packet[0] & 0x80 or not (ROOT / "BOOT_OWN").is_file():
                     raise ValueError("Inkwell boot selection is unavailable")
@@ -259,8 +269,9 @@ def add_kindle_service(device, key, *, settings=DEFAULT_SETTINGS):
             state = None
         # Older clients expect a fixed number of fields. Network identifiers
         # are available only on encrypted responses.
-        if state is not None and not extended:
-            state = state[: 15 if encrypted else 13]
+        if state is not None:
+            count = 17 if power else 16 if extended else 15 if encrypted else 13
+            state = state[:count]
         data = json.dumps(state, separators=(",", ":")).encode()
         if encrypted:
             responses[connection] = cipher.encrypt(nonce[:12], data, header)

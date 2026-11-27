@@ -41,10 +41,14 @@ impl Authenticated {
     }
 
     pub fn telemetry_fields(&self) -> usize {
-        match self.opcode & 0xc0 {
-            0xc0 => 16,
-            0x80 => 15,
-            _ => 13,
+        if self.opcode & 0xe0 == 0xe0 {
+            17
+        } else {
+            match self.opcode & 0xc0 {
+                0xc0 => 16,
+                0x80 => 15,
+                _ => 13,
+            }
         }
     }
 
@@ -101,7 +105,7 @@ impl<'a> Session<'a> {
                 data.len() == 16 && bool::from(data.ct_eq(&tag[..16])),
                 "invalid request authentication"
             );
-            let mask = if opcode & 0xc0 == 0xc0 { 0x3f } else { 0x7f };
+            let mask = if opcode & 0xc0 == 0xc0 { 0x1f } else { 0x7f };
             Request::Control(opcode & mask)
         };
         Ok(Authenticated {

@@ -257,6 +257,7 @@ async fn telemetry() -> Result<Vec<Value>> {
         json!(connected.then(|| status.get("ssid")).flatten()),
         json!(connected.then(|| status.get("bssid")).flatten()),
         json!(connected.then_some(ip).flatten()),
+        json!(crate::advertising::external_power()),
     ])
 }
 

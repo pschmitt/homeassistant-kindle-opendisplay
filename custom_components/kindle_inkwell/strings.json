@@ -36,6 +36,9 @@
     "binary_sensor": {
       "charging": {
         "name": "Charging"
+      },
+      "plugged_in": {
+        "name": "Plugged in"
       }
     },
     "sensor": {
