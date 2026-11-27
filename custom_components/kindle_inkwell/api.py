@@ -196,9 +196,7 @@ class KindleBleClient:
             flags = self._telemetry_flags or 0x80
             if control == "prevent_sleep" and flags != 0xF0:
                 raise KindleTelemetryUnsupported("The receiver has no sleep override")
-            field = {"wifi": "wifi_enabled", "ssh": "ssh_enabled"}.get(
-                control, control
-            )
+            field = {"wifi": "wifi_enabled", "ssh": "ssh_enabled"}.get(control, control)
             for attempt in range(2):
                 try:
                     state = await self._exchange(opcode, flags=flags)
@@ -213,7 +211,9 @@ class KindleBleClient:
                     if getattr(state, field) is not enabled and attempt == 0:
                         continue
                 if getattr(state, field) is not enabled:
-                    raise KindleError("Kindle telemetry did not confirm the switch state")
+                    raise KindleError(
+                        "Kindle telemetry did not confirm the switch state"
+                    )
                 return state
 
     async def reboot(self, *, stock):
@@ -275,9 +275,9 @@ class KindleBleClient:
                 operation = bytes((opcode | flags,))
                 header = b"kindle-control-v1\0" + nonce + operation
                 if command is None:
-                    payload = hmac.digest(
-                        self.key, b"request\0" + header, "sha256"
-                    )[:16]
+                    payload = hmac.digest(self.key, b"request\0" + header, "sha256")[
+                        :16
+                    ]
                 else:
                     request_cipher = AESGCM(
                         hmac.digest(
