@@ -125,6 +125,15 @@
         "name": "Frontlight brightness"
       }
     },
+    "select": {
+      "orientation": {
+        "name": "Orientation",
+        "state": {
+          "portrait": "Portrait",
+          "landscape": "Landscape"
+        }
+      }
+    },
     "event": {
       "wake": {
         "name": "Event",

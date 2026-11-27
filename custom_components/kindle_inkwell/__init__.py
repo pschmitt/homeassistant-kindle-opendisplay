@@ -13,6 +13,7 @@ PLATFORMS = (
     Platform.BUTTON,
     Platform.NUMBER,
     Platform.EVENT,
+    Platform.SELECT,
 )
 
 
