@@ -4,7 +4,10 @@ import asyncio
 import base64
 import hmac
 import json
+import logging
 from dataclasses import dataclass
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def read_key(path):
@@ -193,11 +196,25 @@ class KindleBleClient:
             flags = self._telemetry_flags or 0x80
             if control == "prevent_sleep" and flags != 0xF0:
                 raise KindleTelemetryUnsupported("The receiver has no sleep override")
-            try:
-                return await self._exchange(opcode, flags=flags)
-            except KindleLinkError:
-                await asyncio.sleep(2)
-                return await self._exchange(opcode, flags=flags)
+            field = {"wifi": "wifi_enabled", "ssh": "ssh_enabled"}.get(
+                control, control
+            )
+            for attempt in range(2):
+                try:
+                    state = await self._exchange(opcode, flags=flags)
+                except KindleLinkError as err:
+                    await asyncio.sleep(2)
+                    try:
+                        state = await self._exchange(0, flags=flags)
+                    except KindleLinkError:
+                        if attempt == 1:
+                            raise err
+                        continue
+                    if getattr(state, field) is not enabled and attempt == 0:
+                        continue
+                if getattr(state, field) is not enabled:
+                    raise KindleError("Kindle telemetry did not confirm the switch state")
+                return state
 
     async def reboot(self, *, stock):
         """Request a single reboot and await authenticated acknowledgement."""
@@ -227,9 +244,12 @@ class KindleBleClient:
         )
         if device is None:
             raise KindleLinkError("No active Bluetooth connection path to the Kindle")
+        client = None
+        stage = "connect"
         try:
             async with asyncio.timeout(50):
                 for attempt in range(2):
+                    stage = "connect"
                     client = await establish_connection(
                         BleakClientWithServiceCache,
                         device,
@@ -237,6 +257,7 @@ class KindleBleClient:
                         max_attempts=1,
                         use_services_cache=attempt == 0,
                     )
+                    stage = "read challenge"
                     try:
                         if client.services.get_characteristic(_CHALLENGE) is None:
                             raise KindleError("Kindle control service is missing")
@@ -244,38 +265,42 @@ class KindleBleClient:
                         if len(nonce) != 16:
                             raise KindleError("Invalid Kindle challenge")
                     except (BleakError, KindleError):
-                        try:
-                            if attempt == 1:
-                                raise
-                            await client.clear_cache()
-                        finally:
-                            await client.disconnect()
+                        if attempt == 1:
+                            raise
+                        await client.clear_cache()
+                        await self._disconnect(client)
+                        client = None
                     else:
                         break
-                try:
-                    operation = bytes((opcode | flags,))
-                    header = b"kindle-control-v1\0" + nonce + operation
-                    if command is None:
-                        payload = hmac.digest(
-                            self.key, b"request\0" + header, "sha256"
-                        )[:16]
-                    else:
-                        request_cipher = AESGCM(
-                            hmac.digest(
-                                self.key,
-                                b"kindle-control command request encryption",
-                                "sha256",
-                            )
+                operation = bytes((opcode | flags,))
+                header = b"kindle-control-v1\0" + nonce + operation
+                if command is None:
+                    payload = hmac.digest(
+                        self.key, b"request\0" + header, "sha256"
+                    )[:16]
+                else:
+                    request_cipher = AESGCM(
+                        hmac.digest(
+                            self.key,
+                            b"kindle-control command request encryption",
+                            "sha256",
                         )
-                        payload = request_cipher.encrypt(nonce[:12], command, header)
-                    await client.write_gatt_char(
-                        _REQUEST, operation + payload, response=True
                     )
-                    raw = await client.read_gatt_char(_RESPONSE)
-                finally:
-                    await client.disconnect()
+                    payload = request_cipher.encrypt(nonce[:12], command, header)
+                stage = "write request"
+                await client.write_gatt_char(
+                    _REQUEST, operation + payload, response=True
+                )
+                stage = "read response"
+                raw = await client.read_gatt_char(_RESPONSE)
         except (BleakError, TimeoutError, OSError) as err:
-            raise KindleLinkError("Kindle BLE connection or command failed") from err
+            _LOGGER.debug(
+                "Kindle BLE exchange failed at %s: %s", stage, type(err).__name__
+            )
+            raise KindleLinkError(f"Kindle BLE exchange failed at {stage}") from err
+        finally:
+            if client is not None:
+                await self._disconnect(client)
 
         cipher = AESGCM(
             hmac.digest(self.key, b"kindle-control response encryption", "sha256")
@@ -309,3 +334,14 @@ class KindleBleClient:
             raise KindleError(
                 "Kindle reported a failed command or invalid telemetry"
             ) from err
+
+    @staticmethod
+    async def _disconnect(client):
+        """Bound connection cleanup independently of the response."""
+        from bleak.exc import BleakError
+
+        try:
+            async with asyncio.timeout(3):
+                await client.disconnect()
+        except (BleakError, TimeoutError, OSError) as err:
+            _LOGGER.debug("Kindle BLE disconnect failed: %s", type(err).__name__)
