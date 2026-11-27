@@ -6,7 +6,14 @@ from .coordinator import KindleCoordinator
 from .execute import setup_execute
 from .upload import setup_upload
 
-PLATFORMS = (Platform.SENSOR, Platform.BINARY_SENSOR, Platform.SWITCH, Platform.BUTTON)
+PLATFORMS = (
+    Platform.SENSOR,
+    Platform.BINARY_SENSOR,
+    Platform.SWITCH,
+    Platform.BUTTON,
+    Platform.NUMBER,
+    Platform.EVENT,
+)
 
 
 async def async_setup(hass, config):

@@ -6,44 +6,41 @@
 
 ## Features
 
-- **OpenDisplay BLE** sends images to the e-ink panel from Home Assistant.
-- **BTHome** feeds passive battery and charging readings into Kindle Inkwell.
-- **Kindle Inkwell** adds frontlight, Wi-Fi and SSH controls, battery and
-  device diagnostics, and buttons for rebooting into Inkwell or Kindle OS.
+- **OpenDisplay over BLE** sends images to the e-ink panel.
+- **Kindle Inkwell** adds battery diagnostics, frontlight controls, Wi-Fi
+  and SSH switches, and buttons to select the next boot system.
+- **Timed sleep** can save power on battery and bring Wi-Fi and BLE back
+  on wake.
 
 ## Install
 
-Find the prebuilt Inkwell ZIP and ARMv7 receiver on
+Download the Inkwell ZIP or static Rust ARMv7 receiver from
 [GitHub Releases](https://github.com/pschmitt/homeassistant-kindle-opendisplay/releases).
+The [image guide](docs/inkwell-image.md) covers a fresh Inkwell installation.
+For an existing [Inkwell](https://github.com/akaped/Inkwell) installation,
+follow the [Kindle setup guide](docs/opendisplay-ble.md#install-on-the-kindle).
 
-Install the Paperwhite 4 port of [Inkwell](https://github.com/akaped/Inkwell).
-Copy the repository's `opendisplay/` directory to the Kindle. Run the
-[post-installer](opendisplay/install.py) as root from that directory:
-
-```sh
-python3 install.py --cpu-latency-us 50
-```
-
-Omit the option to keep the existing idle setting. See the
-[Kindle setup guide](docs/opendisplay-ble.md#install-on-the-kindle), then
-configure the [Home Assistant integration](docs/kindle-inkwell.md).
+Then add the [Home Assistant integration](docs/kindle-inkwell.md) and the
+discovered OpenDisplay device. See the integration guide for feature
+requirements when using an older receiver.
 
 ## Development
 
-Run `nix develop` for the Python, Rust, and linting tools on Linux.
-Build the ARMv7 receiver with `nix build '.#kindle-armv7'`. See the
-[Inkwell image guide](docs/inkwell-image.md) for the full Paperwhite 4
-image and current hardware validation status.
+Use `nix develop` for development tools and `nix build '.#kindle-armv7'`
+for the Kindle binary. See [Rust receiver validation](docs/rust-parity.md)
+for tests and performance measurements.
 
 ## Documentation
 
 | Topic | Description |
 | --- | --- |
+| [Device configuration](docs/device-config.md) | Defaults and allowed values for every Kindle TOML setting. |
 | [OpenDisplay BLE](docs/opendisplay-ble.md) | Kindle post-install, panel refresh, and Bluetooth hardware findings. |
 | [Home Assistant integration](docs/kindle-inkwell.md) | Marketplace link, pairing, BLE controls, and image uploads. |
 | [Tested device](docs/tested-device.md) | Hardware, firmware, and verification on the Paperwhite 4. |
 | [Inkwell image](docs/inkwell-image.md) | Nix-built Paperwhite 4 archive and ARMv7 receiver. |
-| [Roadmap](docs/roadmap.md) | Rust, Crane, Circus, and prebuilt Inkwell images. |
+| [Rust receiver validation](docs/rust-parity.md) | Protocol coverage and idle CPU use. |
+| [Roadmap](docs/roadmap.md) | Milestones for the receiver, Nix builds, and images. |
 
 ## License
 

@@ -4,7 +4,7 @@ use std::path::Path;
 const BATTERY: &str = "/sys/class/power_supply/bd71827_bat";
 const DISPLAY_UUID: [u8; 4] = [3, 3, 0x46, 0x24];
 
-pub fn temperature() -> u8 {
+pub fn cpu_temperature() -> Option<i32> {
     let zone = fs::read_dir("/sys/class/thermal")
         .into_iter()
         .flatten()
@@ -16,11 +16,14 @@ pub fn temperature() -> u8 {
         });
     zone.and_then(|path| fs::read_to_string(path.join("temp")).ok())
         .and_then(|value| value.trim().parse::<i32>().ok())
-        .map_or(130, |value| {
-            (f64::from(value) / 500.0 + 80.0)
-                .round_ties_even()
-                .clamp(0.0, 255.0) as u8
-        })
+}
+
+pub fn temperature() -> u8 {
+    cpu_temperature().map_or(130, |value| {
+        (f64::from(value) / 500.0 + 80.0)
+            .round_ties_even()
+            .clamp(0.0, 255.0) as u8
+    })
 }
 
 pub fn external_power() -> Option<bool> {

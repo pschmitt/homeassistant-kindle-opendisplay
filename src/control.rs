@@ -15,11 +15,13 @@ use std::{
 use subtle::ConstantTimeEq as _;
 
 const CONTEXT: &[u8] = b"kindle-control-v1\0";
+const FRONTLIGHT_LEVEL: u8 = 0xbc;
 const COMMAND: u8 = 0x89;
 const MAX_COMMAND: usize = 160;
 
 pub enum Request {
     Control(u8),
+    FrontlightLevel(u16),
     Command(String),
 }
 
@@ -42,6 +44,7 @@ impl Authenticated {
 
     pub fn telemetry_fields(&self) -> usize {
         match self.opcode & 0xf0 {
+            0xb0 => 19,
             0xf0 => 18,
             0xe0 => 17,
             0xc0 | 0xd0 => 16,
@@ -97,6 +100,17 @@ impl<'a> Session<'a> {
                 )
                 .map_err(|_| anyhow::anyhow!("invalid command authentication"))?;
             Request::Command(String::from_utf8(clear)?)
+        } else if opcode == FRONTLIGHT_LEVEL {
+            let [high, low, tag @ ..] = data else {
+                anyhow::bail!("missing frontlight level");
+            };
+            let level = [*high, *low];
+            let expected = mac(self.key, &[b"request\0", &header, &level]);
+            ensure!(
+                tag.len() == 16 && bool::from(tag.ct_eq(&expected[..16])),
+                "invalid frontlight authentication"
+            );
+            Request::FrontlightLevel(u16::from_be_bytes(level))
         } else {
             let tag = mac(self.key, &[b"request\0", &header]);
             ensure!(
@@ -104,7 +118,7 @@ impl<'a> Session<'a> {
                 "invalid request authentication"
             );
             let mask = match opcode & 0xf0 {
-                0xf0 => 0x0f,
+                0xb0 | 0xf0 => 0x0f,
                 0xe0 => 0x1f,
                 0xc0 | 0xd0 => 0x1f,
                 _ => 0x7f,
@@ -149,4 +163,36 @@ fn mac(key: &[u8; 32], parts: &[&[u8]]) -> [u8; 32] {
         mac.update(part);
     }
     mac.finalize().into_bytes().into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn frontlight_authentication_covers_the_level_and_challenge() -> Result<()> {
+        let key = [0x23; 32];
+        let mut session = Session::new(&key);
+        for mutate in [false, true] {
+            let nonce = session.challenge()?;
+            let level = 1024u16.to_be_bytes();
+            let tag = mac(
+                &key,
+                &[b"request\0", CONTEXT, &nonce, &[FRONTLIGHT_LEVEL], &level],
+            );
+            let mut packet = [&[FRONTLIGHT_LEVEL][..], &level, &tag[..16]].concat();
+            if mutate {
+                packet[2] ^= 1;
+                assert!(session.authenticate(&packet).is_err());
+            } else {
+                let authenticated = session.authenticate(&packet)?;
+                assert!(matches!(
+                    authenticated.request,
+                    Request::FrontlightLevel(1024)
+                ));
+                assert!(session.authenticate(&packet).is_err());
+            }
+        }
+        Ok(())
+    }
 }

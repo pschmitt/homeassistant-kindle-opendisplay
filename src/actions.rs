@@ -53,6 +53,13 @@ impl<'a> Actions<'a> {
                     Value::Null
                 }
             },
+            Request::FrontlightLevel(level) => match self.set_frontlight(*level).await {
+                Ok(level) => json!(level),
+                Err(error) => {
+                    eprintln!("Kindle frontlight request failed: {error:#}");
+                    Value::Null
+                }
+            },
             Request::Command(text) => {
                 if !self.commands.enabled {
                     json!({"error": "disabled"})
@@ -66,6 +73,15 @@ impl<'a> Actions<'a> {
                 }
             }
         }
+    }
+
+    async fn set_frontlight(&self, level: u16) -> Result<u16> {
+        ensure!(
+            self.paperwhite,
+            "hardware operations require the Paperwhite transport"
+        );
+        command(FRONTLIGHT, &[], &format!("level {level}"), 8).await?;
+        Ok(level)
     }
 
     async fn control(&mut self, opcode: u8, request: &Authenticated) -> Result<Vec<Value>> {
@@ -104,7 +120,7 @@ impl<'a> Actions<'a> {
             }
             10 | 11 => {
                 ensure!(
-                    request.telemetry_fields() == 18,
+                    request.telemetry_fields() >= 18,
                     "missing diagnostic protocol version"
                 );
                 set_file(Path::new(PREVENT_SLEEP), opcode == 11)?;
@@ -112,7 +128,11 @@ impl<'a> Actions<'a> {
             _ => anyhow::bail!("unknown Kindle control"),
         }
         let mut state = telemetry().await?;
-        state.truncate(request.telemetry_fields());
+        if request.telemetry_fields() == 19 {
+            state.push(diagnostics());
+        } else {
+            state.truncate(request.telemetry_fields());
+        }
         if matches!(opcode, 7 | 8) {
             self.reboot = Some(tokio::spawn(async move {
                 if let Err(error) = reboot(opcode == 8).await {
@@ -270,6 +290,46 @@ async fn telemetry() -> Result<Vec<Value>> {
         json!(crate::advertising::external_power()),
         json!(Path::new(PREVENT_SLEEP).is_file()),
     ])
+}
+
+fn diagnostics() -> Value {
+    let battery = "/sys/class/power_supply/bd71827_bat";
+    let reading = |name| read(&format!("{battery}/{name}")).and_then(|s| s.parse::<i64>().ok());
+    let backlight = "/sys/class/backlight/bl";
+    let light = |name| read(&format!("{backlight}/{name}")).and_then(|s| s.parse::<u16>().ok());
+    let uptime =
+        read("/proc/uptime").and_then(|text| text.split_whitespace().next()?.parse::<f64>().ok());
+    let wake = read("/run/opendisplay-last-wake")
+        .and_then(|text| serde_json::from_str::<Value>(&text).ok());
+    json!([
+        crate::advertising::cpu_temperature().map(|temp| f64::from(temp) / 1000.0),
+        reading("temp"),
+        reading("voltage_now"),
+        reading("current_now"),
+        reading("current_avg"),
+        reading("charge_now"),
+        reading("charge_full"),
+        reading("charge_full_design"),
+        reading("battery_cycle"),
+        read(&format!("{battery}/health")),
+        light("actual_brightness"),
+        light("max_brightness"),
+        uptime,
+        uptime
+            .zip(monotonic_seconds())
+            .map(|(boot, monotonic)| (boot - monotonic).max(0.0)),
+        wake,
+    ])
+}
+
+fn monotonic_seconds() -> Option<f64> {
+    let mut value = libc::timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
+    // SAFETY: value is an initialized, writable timespec.
+    let status = unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut value) };
+    (status == 0).then(|| value.tv_sec as f64 + (value.tv_nsec as f64 / 1e9))
 }
 
 struct ProcessGroup(i32);

@@ -22,13 +22,9 @@ filesystem. Add your own Wi-Fi and SSH configuration using the upstream
 instructions. Device keys, addresses, and user configuration belong on the
 Kindle.
 
-With OpenDisplay enabled, the receiver starts before Inkwell Home can draw.
-Home starts if the receiver exits, or immediately if OpenDisplay or
-autostart is disabled. When Home owns the panel, external power inhibits
-automatic idle sleep by default. Edit
-`stay_awake_on_external_power` in `/opt/opendisplay/config.toml` to change it.
-The **Prevent sleep** diagnostic switch also inhibits automatic idle sleep
-on battery.
+OpenDisplay starts before Inkwell Home and gives the panel back if the
+receiver stops. See the [device settings](opendisplay-ble.md#device-settings)
+for autostart, power policy, and timed sleep.
 
 For an existing installation, build just the receiver with
 `nix build '.#kindle-armv7'`. Copy the binary to the device and use

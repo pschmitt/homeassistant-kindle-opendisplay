@@ -47,6 +47,23 @@ case "${SSH_ORIGINAL_COMMAND:-}" in
       fi
     fi
     ;;
+  'level '*)
+    requested=${SSH_ORIGINAL_COMMAND#level }
+    read -r maximum < /sys/class/backlight/bl/max_brightness
+    case "$requested" in
+      ''|*[!0-9]*) exit 2 ;;
+    esac
+    [ "$requested" -le "$maximum" ] || exit 2
+    if [ "$requested" -eq 0 ] && [ "$level" -gt 0 ]
+    then
+      printf '%s\n' "$level" > "$saved_level"
+    fi
+    set_level "$requested"
+    if [ "$requested" -gt 0 ]
+    then
+      printf '%s\n' "$requested" > "$saved_level"
+    fi
+    ;;
   battery)
     battery=/sys/class/power_supply/bd71827_bat
     read -r capacity < "$battery/capacity"
@@ -134,7 +151,7 @@ print(json.dumps({
 PY
     ;;
   *)
-    printf '%s\n' 'Expected Kindle command: on, off, status, battery, or info' >&2
+    printf '%s\n' 'Expected Kindle command: on, off, level, status, battery, or info' >&2
     exit 2
     ;;
 esac

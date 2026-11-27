@@ -1,6 +1,7 @@
 """Run OpenDisplay with optional RTC-backed suspend cycles."""
 
 import fcntl
+import json
 import os
 import signal
 import subprocess
@@ -20,6 +21,7 @@ FRAME = Path("frame.bin")
 PREVENT_SLEEP = Path("prevent-sleep")
 SESSION_LOCK = Path("/run/opendisplay-session.lock")
 SESSION_GRACE_SECONDS = 8
+WAKE_RECORD = Path("/run/opendisplay-last-wake")
 
 
 def frame_stamp():
@@ -61,6 +63,10 @@ def suspend(settings, stopping):
         POWER_STATE.write_text("mem\n")
         suspended = time.clock_gettime(time.CLOCK_BOOTTIME) - time.monotonic() - before
         print(f"OpenDisplay resumed after {suspended:.2f}s suspended", flush=True)
+        if suspended >= 1:
+            staged = WAKE_RECORD.with_suffix(".tmp")
+            staged.write_text(json.dumps([int(time.time()), round(suspended, 2)]))
+            staged.replace(WAKE_RECORD)
         return True
     finally:
         alarm.write_text("0\n")

@@ -33,6 +33,27 @@ class KindleLinkError(KindleError):
 
 
 @dataclass(frozen=True)
+class KindleDiagnostics:
+    """Additional readings from the Paperwhite's Linux drivers."""
+
+    cpu_temperature: float | None
+    battery_temperature: int | None
+    battery_voltage: int | None
+    battery_current: int | None
+    battery_average_current: int | None
+    battery_charge: int | None
+    battery_full_charge: int | None
+    battery_design_charge: int | None
+    battery_cycles: int | None
+    battery_health: str | None
+    frontlight_level: int | None
+    frontlight_maximum: int | None
+    uptime: float | None
+    suspend_time: float | None
+    wake: tuple[int, float] | None
+
+
+@dataclass(frozen=True)
 class KindleState:
     """The latest reported device state."""
 
@@ -54,6 +75,7 @@ class KindleState:
     ip_address: str | None = None
     plugged_in: bool | None = None
     prevent_sleep: bool | None = None
+    diagnostics: KindleDiagnostics | None = None
 
 
 @dataclass(frozen=True)
@@ -159,7 +181,7 @@ _OPERATIONS = {
     "ssh": (5, 6),
     "prevent_sleep": (10, 11),
 }
-_TELEMETRY_FIELDS = {0xF0: 18, 0xE0: 17, 0xC0: 16, 0x80: 15}
+_TELEMETRY_FIELDS = {0xB0: 19, 0xF0: 18, 0xE0: 17, 0xC0: 16, 0x80: 15}
 
 
 class KindleBleClient:
@@ -194,7 +216,7 @@ class KindleBleClient:
         opcode = _OPERATIONS[control][enabled]
         async with self.lock:
             flags = self._telemetry_flags or 0x80
-            if control == "prevent_sleep" and flags != 0xF0:
+            if control == "prevent_sleep" and flags not in (0xB0, 0xF0):
                 raise KindleTelemetryUnsupported("The receiver has no sleep override")
             field = {"wifi": "wifi_enabled", "ssh": "ssh_enabled"}.get(control, control)
             for attempt in range(2):
@@ -216,6 +238,22 @@ class KindleBleClient:
                     )
                 return state
 
+    async def set_frontlight_level(self, level: int):
+        """Set a bounded hardware brightness and confirm the applied value."""
+        if type(level) is not int or not 0 <= level <= 65535:
+            raise ValueError("Invalid frontlight level")
+        async with self.lock:
+            if self._telemetry_flags != 0xB0:
+                raise KindleTelemetryUnsupported(
+                    "The receiver has no brightness control"
+                )
+            try:
+                await self._exchange(12, flags=0xB0, level=level)
+            except KindleLinkError:
+                state = await self._exchange(0, flags=0xB0)
+                if state.diagnostics.frontlight_level != level:
+                    raise KindleError("Kindle telemetry did not confirm the brightness")
+
     async def reboot(self, *, stock):
         """Request a single reboot and await authenticated acknowledgement."""
         async with self.lock:
@@ -229,7 +267,7 @@ class KindleBleClient:
         async with self.lock:
             return await self._exchange(9, command=payload)
 
-    async def _exchange(self, opcode, *, flags=0x80, command=None):
+    async def _exchange(self, opcode, *, flags=0x80, command=None, level=None):
         from bleak.exc import BleakError
         from bleak_retry_connector import (
             BleakClientWithServiceCache,
@@ -274,7 +312,15 @@ class KindleBleClient:
                         break
                 operation = bytes((opcode | flags,))
                 header = b"kindle-control-v1\0" + nonce + operation
-                if command is None:
+                if level is not None:
+                    value = level.to_bytes(2, "big")
+                    payload = (
+                        value
+                        + hmac.digest(
+                            self.key, b"request\0" + header + value, "sha256"
+                        )[:16]
+                    )
+                elif command is None:
                     payload = hmac.digest(self.key, b"request\0" + header, "sha256")[
                         :16
                     ]
@@ -311,6 +357,10 @@ class KindleBleClient:
             raise KindleError("Kindle BLE response authentication failed") from err
         try:
             fields = json.loads(data)
+            if level is not None:
+                if type(fields) is not int or fields != level:
+                    raise ValueError
+                return fields
             if command is not None:
                 if fields.get("error") == "disabled":
                     raise KindleError("BLE command execution is disabled on the Kindle")
@@ -326,9 +376,19 @@ class KindleBleClient:
             if not isinstance(fields, list) or len(fields) != _TELEMETRY_FIELDS[flags]:
                 raise ValueError
             if any(
-                value is not None and type(value) is not bool for value in fields[16:]
+                value is not None and type(value) is not bool for value in fields[16:18]
             ):
                 raise ValueError
+            if flags == 0xB0:
+                readings = fields[-1]
+                if not isinstance(readings, list) or len(readings) != 15:
+                    raise ValueError
+                if readings[-1] is not None:
+                    timestamp, duration = readings[-1]
+                    if type(timestamp) is not int or type(duration) not in (float, int):
+                        raise ValueError
+                    readings[-1] = (timestamp, duration)
+                fields[-1] = KindleDiagnostics(*readings)
             return KindleState(*fields)
         except (ValueError, TypeError, KeyError, AttributeError) as err:
             raise KindleError(

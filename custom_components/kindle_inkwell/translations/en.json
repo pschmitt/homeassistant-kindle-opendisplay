@@ -62,6 +62,48 @@
       },
       "last_battery_broadcast": {
         "name": "Last battery broadcast"
+      },
+      "cpu_temperature": {
+        "name": "CPU temperature"
+      },
+      "battery_temperature": {
+        "name": "Battery temperature"
+      },
+      "battery_voltage": {
+        "name": "Battery voltage"
+      },
+      "battery_current": {
+        "name": "Battery current"
+      },
+      "battery_average_current": {
+        "name": "Battery average current"
+      },
+      "battery_charge": {
+        "name": "Battery charge"
+      },
+      "battery_full_charge": {
+        "name": "Battery full charge"
+      },
+      "battery_design_charge": {
+        "name": "Battery design charge"
+      },
+      "battery_cycles": {
+        "name": "Battery cycles"
+      },
+      "battery_health": {
+        "name": "Battery health"
+      },
+      "uptime": {
+        "name": "Uptime"
+      },
+      "suspend_time": {
+        "name": "Total suspend time"
+      },
+      "last_wake": {
+        "name": "Last wake"
+      },
+      "last_suspend_duration": {
+        "name": "Last suspend duration"
       }
     },
     "switch": {
@@ -76,6 +118,19 @@
       },
       "prevent_sleep": {
         "name": "Prevent sleep"
+      }
+    },
+    "number": {
+      "frontlight_level": {
+        "name": "Frontlight brightness"
+      }
+    },
+    "event": {
+      "wake": {
+        "name": "Power event",
+        "state": {
+          "wake": "Woke from timed suspend"
+        }
       }
     },
     "button": {

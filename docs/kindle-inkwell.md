@@ -19,8 +19,8 @@ Home Assistant's configuration. For a submodule deployment, link the domain
 directory to its source tree on the server. Restart Home Assistant after
 installing or updating the integration.
 
-Run the [Kindle post-installer](opendisplay-ble.md#install-on-the-kindle).
-It creates the key at `/opt/opendisplay/control.key` on the Kindle. Copy it
+Install the [Kindle receiver](opendisplay-ble.md#install-on-the-kindle).
+The installation creates the key at `/opt/opendisplay/control.key` on the Kindle. Copy it
 securely to a private mode-0600 file readable by Home Assistant Core.
 
 ## Configure
@@ -54,32 +54,56 @@ The standalone Home Assistant BTHome entry is optional and creates an
 additional device record. If you previously added it, remove that entry
 and ignore its rediscovery to keep a single pair of battery entities.
 
-## Connection diagnostics
+## Entities
 
-**Last telemetry poll** records the last successful active read. **Last
-battery broadcast** records the last observed BTHome battery advertisement,
-with updates limited to once a minute. Both keep their last value through a
-connection loss. If only the broadcast timestamp advances, the radio is
-still advertising while the active connection is failing. A quiet radio
-could mean the Kindle is asleep, out of range, or powered off.
+Names are shown as they appear on the Kindle Inkwell device. The entity
+ID normally includes the Kindle's device name.
 
-## Prevent automatic sleep
+| Domain | Entity | Reading or action |
+| --- | --- | --- |
+| Sensor | **Battery** | Capacity in percent, using the BTHome broadcast when available. |
+| Sensor | **Wi-Fi signal** | Signal strength in dBm. |
+| Sensor | **SSID** | Associated network name. Attributes include device model, Kindle firmware and build, kernel, and Alpine version. |
+| Sensor | **BSSID** | Associated access point address. |
+| Sensor | **IP address** | Current Wi-Fi IPv4 address. |
+| Sensor | **Last telemetry poll** | Last successful active telemetry read. |
+| Sensor | **Last battery broadcast** | Last observed BTHome battery packet, sampled at most once a minute. BLE only. |
+| Sensor | **CPU temperature** | i.MX chip temperature in °C. |
+| Sensor | **Battery temperature** | Stock gauge temperature in °C. |
+| Sensor | **Battery voltage** | Voltage in V. |
+| Sensor | **Battery current** | Instantaneous current in mA, with the driver sign preserved. |
+| Sensor | **Battery average current** | Driver average in mA. |
+| Sensor | **Battery charge** | Remaining charge in mAh. |
+| Sensor | **Battery full charge** | Learned full charge in mAh. |
+| Sensor | **Battery design charge** | Design charge in mAh. |
+| Sensor | **Battery cycles** | Cycle count reported by the battery driver. |
+| Sensor | **Battery health** | Driver state such as Good. |
+| Sensor | **Uptime** | Seconds since boot, including suspend. |
+| Sensor | **Total suspend time** | Seconds spent suspended since boot. |
+| Sensor | **Last wake** | Time of the most recent recorded timed-suspend resume. |
+| Sensor | **Last suspend duration** | Duration of that suspend in seconds. |
+| Binary sensor | **Charging** | The battery is actively charging. |
+| Binary sensor | **Plugged in** | USB or charger power is present, including when charging stops at 100%. |
+| Switch | **Frontlight** | Turn the light off or restore the last nonzero level. |
+| Switch | **Wi-Fi** | Disconnect or reassociate Wi-Fi over BLE. |
+| Switch | **SSH (Wi-Fi)** | Toggle Inkwell's Wi-Fi SSH listener on port 2022 over BLE. |
+| Switch | **Prevent sleep** | Keep the receiver awake over BLE. The override persists across receiver restarts. |
+| Number | **Frontlight brightness** | Slider from 0% (off) to 100% of the driver maximum. |
+| Event | **Power event** | New `wake` event after HA observes a recorded timed-suspend resume. Attributes give the device's wake time and suspended seconds. |
+| Button | **Reboot into Inkwell** | Restart into Inkwell over BLE. |
+| Button | **Reboot into Kindle OS** | Boot Amazon's OS once over BLE. Its next normal reboot returns to Inkwell if the boot hook is enabled. |
 
-**Prevent sleep** is a diagnostic switch. When Inkwell Home owns the panel,
-the patched image skips automatic idle sleep while the switch is on,
-including on battery. Turning the switch off restores the configured idle
-policy. By default the image already skips idle sleep on USB or a charger.
-Home still handles manual sleep. The override persists across receiver
-restarts. OpenDisplay mode keeps the receiver awake for incoming frames.
+The extended battery and CPU readings, uptime, sleep history, Power event,
+and brightness slider require the updated Rust receiver and BLE. The
+v0.7.0 receiver supports the earlier readings and controls. Build the
+ARMv7 receiver from the current checkout if your release predates these
+features.
 
-## Reboot
-
-Both reboot buttons appear under Diagnostics. **Reboot into Inkwell**
-restarts the device into Inkwell.
-**Reboot into Kindle OS** selects Amazon's operating system for one boot.
-The next normal reboot from Kindle OS returns to Inkwell if its boot hook
-is enabled. The BLE buttons are available while the Inkwell receiver is
-running, so restart from the Kindle UI to return from Kindle OS.
+The contact timestamps retain their last reading during a connection loss.
+BLE controls require an awake Kindle. The wake event is based on the
+scheduler's resume record. A gap in BLE contact can occur during suspend,
+loss of range, or power-off. See [Device configuration](device-config.md)
+for the sleep and external-power settings.
 
 ## Send an image
 

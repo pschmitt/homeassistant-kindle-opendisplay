@@ -18,6 +18,12 @@ class KindleEntity(CoordinatorEntity[KindleCoordinator]):
         self._attr_device_info = coordinator.device_info
 
     @property
+    def diagnostics(self):
+        """Return the optional extended device readings."""
+        if state := self.coordinator.data:
+            return state.diagnostics
+
+    @property
     def available(self):
         """An entity is available after a successful poll."""
         return super().available and self.coordinator.data is not None

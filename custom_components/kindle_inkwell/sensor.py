@@ -1,5 +1,7 @@
 """Kindle battery and diagnostic sensors."""
 
+from datetime import UTC, datetime
+
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
@@ -12,6 +14,24 @@ from homeassistant.const import (
 )
 
 from .entity import KindleEntity
+
+# Voltage and current arrive in micro-units, and charge arrives in µAh.
+_DIAGNOSTICS = {
+    "cpu_temperature": (SensorDeviceClass.TEMPERATURE, "°C", 1),
+    "battery_temperature": (SensorDeviceClass.TEMPERATURE, "°C", 1),
+    "battery_voltage": (SensorDeviceClass.VOLTAGE, "V", 1_000_000),
+    "battery_current": (SensorDeviceClass.CURRENT, "mA", 1_000),
+    "battery_average_current": (SensorDeviceClass.CURRENT, "mA", 1_000),
+    "battery_charge": (None, "mAh", 1_000),
+    "battery_full_charge": (None, "mAh", 1_000),
+    "battery_design_charge": (None, "mAh", 1_000),
+    "battery_cycles": (None, None, 1),
+    "battery_health": (None, None, 1),
+    "uptime": (SensorDeviceClass.DURATION, "s", 1),
+    "suspend_time": (SensorDeviceClass.DURATION, "s", 1),
+    "last_wake": (SensorDeviceClass.TIMESTAMP, None, 1),
+    "last_suspend_duration": (SensorDeviceClass.DURATION, "s", 1),
+}
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -27,6 +47,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     ]
     if coordinator.ble:
         entities.append(KindleContact(coordinator, "last_battery_broadcast"))
+        entities.extend(KindleDiagnostic(coordinator, key) for key in _DIAGNOSTICS)
     async_add_entities(entities)
 
 
@@ -133,3 +154,35 @@ class KindleContact(KindleEntity, SensorEntity):
     def native_value(self):
         """Return the most recent observed contact."""
         return getattr(self.coordinator, self.key)
+
+
+class KindleDiagnostic(KindleEntity, SensorEntity):
+    """A driver reading or a timestamp from the device's sleep scheduler."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator, key):
+        super().__init__(coordinator, key)
+        self.key = key
+        self._attr_device_class, self._attr_native_unit_of_measurement, self.scale = (
+            _DIAGNOSTICS[key]
+        )
+
+    @property
+    def available(self):
+        return super().available and self.diagnostics is not None
+
+    @property
+    def native_value(self):
+        if (data := self.diagnostics) is None:
+            return None
+        if self.key in ("last_wake", "last_suspend_duration"):
+            if (wake := data.wake) is None:
+                return None
+            return (
+                datetime.fromtimestamp(wake[0], UTC)
+                if self.key == "last_wake"
+                else wake[1]
+            )
+        value = getattr(data, self.key)
+        return value / self.scale if self.scale != 1 and value is not None else value
