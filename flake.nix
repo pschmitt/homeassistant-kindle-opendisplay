@@ -23,6 +23,21 @@
       ...
     }:
     let
+      receiverSource =
+        craneLib:
+        nixpkgs.lib.cleanSourceWith {
+          src = ./.;
+          filter =
+            path: type:
+            craneLib.filterCargoSources path type
+            || builtins.elem (baseNameOf path) [
+              "start"
+              "frontlight"
+              "boot-hook.sh"
+              "previous-boot-hook.sh"
+              "legacy-boot-hook.sh"
+            ];
+        };
       eachSystem = nixpkgs.lib.genAttrs [
         "x86_64-linux"
         "aarch64-linux"
@@ -43,7 +58,7 @@
             targets = [ target ];
           };
           craneLib = (crane.mkLib pkgs).overrideToolchain toolchain;
-          src = craneLib.cleanCargoSource ./.;
+          src = receiverSource craneLib;
           common = {
             inherit src;
             doCheck = false;
@@ -76,7 +91,7 @@
         let
           pkgs = nixpkgs.legacyPackages.${system};
           craneLib = crane.mkLib pkgs;
-          src = craneLib.cleanCargoSource ./.;
+          src = receiverSource craneLib;
           cargoArtifacts = craneLib.buildDepsOnly { inherit src; };
           python = pkgs.python3.withPackages (ps: [
             ps.bumble

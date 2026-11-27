@@ -1,10 +1,10 @@
 use anyhow::{Context, Result, ensure};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 
 pub const PREVENT_SLEEP: &str = "/opt/opendisplay/prevent-sleep";
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {
     pub autostart: bool,
@@ -18,7 +18,7 @@ pub struct Settings {
     pub sleep_for_seconds: u32,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Commands {
     pub enabled: bool,

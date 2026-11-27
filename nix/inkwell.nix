@@ -59,19 +59,20 @@ pkgs.stdenvNoCC.mkDerivation {
       --replace-fail '"$MKE2FS" -q -F -t ext3 -L alpine -E root_owner=0:0' \
         'find "$S" -exec touch -h -d "@$SOURCE_DATE_EPOCH" {} +; "$MKE2FS" -q -F -t ext3 -L alpine -U b5d5f13e-5420-4a0b-b2e2-1da2b17ac001 -E root_owner=0:0,hash_seed=b5d5f13e-5420-4a0b-b2e2-1da2b17ac002,lazy_itable_init=0,lazy_journal_init=0'
 
-    export PYTHONPATH=${overlay}
     python3 - <<'PY'
     from pathlib import Path
-    from install import patch_init
-
     path = Path("src/rootfs/sbin/own-init")
-    path.write_text(patch_init(path.read_text()))
+    hook = Path("${overlay}/boot-hook.sh").read_text()
+    marker = "\ncrashes=0\n"
+    init = path.read_text()
+    if init.count(marker) != 1 or "/opt/opendisplay/autostart" in init:
+        raise SystemExit("Unexpected upstream Inkwell boot hook location")
+    path.write_text(init.replace(marker, f"\n{hook}crashes=0\n", 1))
     PY
     bash -n src/rootfs/sbin/own-init
     mkdir -p src/rootfs/opt/opendisplay
     install -m 0755 ${receiver}/bin/kindle-opendisplay src/rootfs/opt/opendisplay/
     install -m 0755 ${overlay}/start ${overlay}/frontlight src/rootfs/opt/opendisplay/
-    install -m 0644 ${overlay}/settings.py ${overlay}/provision.py ${overlay}/launch.py src/rootfs/opt/opendisplay/
     touch src/rootfs/opt/opendisplay/autostart
   '';
 
@@ -99,8 +100,8 @@ pkgs.stdenvNoCC.mkDerivation {
     debugfs -R 'stat /opt/opendisplay/kindle-opendisplay' out/alpine.img | grep -F 'Type: regular'
     debugfs -R 'stat /opt/opendisplay/control.key' out/alpine.img 2>&1 | grep -F 'File not found'
     debugfs -R 'stat /opt/opendisplay/device.json' out/alpine.img 2>&1 | grep -F 'File not found'
-    debugfs -R 'stat /usr/bin/python3.14' out/alpine.img | grep -F 'Type: regular'
-    debugfs -R 'cat /sbin/own-init' out/alpine.img | grep -F 'exec /opt/opendisplay/start'
+    debugfs -R 'cat /sbin/own-init' out/alpine.img | grep -F 'kindle-opendisplay --setting autostart'
+    debugfs -R 'cat /opt/opendisplay/start' out/alpine.img | grep -F 'kindle-opendisplay --provision'
     runHook postBuild
   '';
 

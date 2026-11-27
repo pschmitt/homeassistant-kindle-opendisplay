@@ -2,6 +2,7 @@ mod actions;
 mod advertising;
 mod control;
 mod settings;
+mod setup;
 mod sleep;
 
 use actions::Actions;
@@ -128,6 +129,30 @@ impl Identity {
 #[tokio::main(flavor = "multi_thread", worker_threads = 1)]
 async fn main() -> Result<()> {
     let mut args = std::env::args_os().skip(1).peekable();
+    match args.peek().and_then(|arg| arg.to_str()) {
+        Some("--install") => return setup::install(args.skip(1)),
+        Some("--provision") => {
+            ensure!(args.count() == 1, "--provision takes no arguments");
+            return setup::provision(Path::new(setup::DIRECTORY));
+        }
+        Some("--setting") => {
+            args.next();
+            let feature = args.next();
+            let result = match (feature.as_deref().and_then(|arg| arg.to_str()), args.next()) {
+                (Some(feature), None) => setup::setting(feature),
+                _ => Err(anyhow::anyhow!("--setting requires one feature")),
+            };
+            match result {
+                Ok(enabled) => std::process::exit(i32::from(!enabled)),
+                Err(error) => {
+                    eprintln!("Invalid OpenDisplay configuration: {error:#}");
+                    std::process::exit(2);
+                }
+            }
+        }
+        Some("--launch") => return setup::launch(args.skip(1)),
+        _ => {}
+    }
     if args.peek().is_some_and(|arg| arg == "--version") {
         println!("kindle-opendisplay {}", env!("CARGO_PKG_VERSION"));
         return Ok(());

@@ -28,9 +28,9 @@ for autostart, power policy, and timed sleep.
 
 For an existing installation, build just the receiver with
 `nix build '.#kindle-armv7'`. Copy the binary to the device and use
-`python3 install.py --receiver-binary PATH` from the
-[post-installer directory](../opendisplay/). The installer preserves an
-existing BLE identity, key and TOML settings.
+its built-in `--install` command. The installer preserves an existing
+BLE identity, key, and TOML settings. See the
+[Kindle setup guide](opendisplay-ble.md#install-on-the-kindle).
 
 ## Validation
 

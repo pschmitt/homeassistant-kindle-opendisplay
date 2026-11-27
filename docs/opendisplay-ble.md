@@ -6,19 +6,20 @@ generation) under [Inkwell](https://github.com/akaped/Inkwell).
 ## Install on the Kindle
 
 The [prebuilt Inkwell image](inkwell-image.md) includes the Rust receiver
-and boot hook. For an existing Inkwell installation, put the
-`opendisplay/` directory and the ARMv7 release binary on the Kindle. Run
-the installer as root from that directory.
+and boot hook. For an existing Inkwell installation, copy the ARMv7
+release binary to a Linux filesystem on the Kindle, such as `/tmp`. Run
+it as root.
 
 ```sh
-python3 install.py --receiver-binary /path/to/kindle-opendisplay-armv7
+chmod +x /tmp/kindle-opendisplay-armv7
+/tmp/kindle-opendisplay-armv7 --install
 ```
 
-Use the installer and receiver binary from the same release or checkout.
-Helper-only updates can reuse an installed binary with Rust sleep
-supervision. The installer keeps the BLE address, control key, and TOML
-settings. On first launch it creates
-`/opt/opendisplay/device.json`, `control.key`, and `config.toml`.
+The binary installs itself and the boot hook. It keeps the existing BLE
+address, control key, and TOML settings. If any are missing, setup creates
+`/opt/opendisplay/device.json`, `control.key`, or `config.toml`. The prebuilt
+image provisions these files on first boot. Pass `--cpu-latency-us 0` or
+`--cpu-latency-us 50` with `--install` to change that setting during setup.
 Pair the resulting device using the
 [Home Assistant guide](kindle-inkwell.md).
 
