@@ -2,7 +2,7 @@
 
 use aes_gcm::{
     Aes256Gcm, KeyInit as _,
-    aead::{Aead as _, Payload},
+    aead::{Aead as _, Nonce, Payload},
 };
 use anyhow::{Context, Result, ensure};
 use hmac::{Hmac, Mac};
@@ -102,7 +102,7 @@ impl<'a> Session<'a> {
             let cipher = Aes256Gcm::new((&key).into());
             let clear = cipher
                 .decrypt(
-                    nonce[..12].into(),
+                    &nonce_of(&nonce),
                     Payload {
                         msg: data,
                         aad: &header,
@@ -168,7 +168,7 @@ impl<'a> Session<'a> {
             let key = mac(self.key, &[b"kindle-control response encryption"]);
             Aes256Gcm::new((&key).into())
                 .encrypt(
-                    request.nonce[..12].into(),
+                    &nonce_of(&request.nonce),
                     Payload {
                         msg: data,
                         aad: &header,
@@ -187,8 +187,14 @@ impl<'a> Session<'a> {
     }
 }
 
+fn nonce_of(nonce: &[u8; 16]) -> Nonce<Aes256Gcm> {
+    let mut gcm = [0; 12];
+    gcm.copy_from_slice(&nonce[..12]);
+    gcm.into()
+}
+
 fn mac(key: &[u8; 32], parts: &[&[u8]]) -> [u8; 32] {
-    let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(key).expect("HMAC accepts any key length");
+    let mut mac = Hmac::<Sha256>::new_from_slice(key).expect("HMAC accepts any key length");
     for part in parts {
         mac.update(part);
     }
