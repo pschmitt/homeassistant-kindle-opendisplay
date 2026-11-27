@@ -10,3 +10,9 @@
 - Keep keys, device identifiers, and instance-specific dashboards out of
   this repository.
 - Coordinate live device changes before reloading the receiver or rebooting.
+- Release with `just release-prepare X.Y.Z`, then `just release-tag` once the
+  bump is on `main`. The tag must match the versions in `Cargo.toml` and the
+  integration manifest; the release workflow checks both. `just release-ota
+  ENTITY` installs the release through a Home Assistant update entity and
+  reads `HASS_URL` and `HASS_TOKEN` from the environment. Coordinate it like
+  any other live device change.
