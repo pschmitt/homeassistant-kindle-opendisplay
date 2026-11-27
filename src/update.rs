@@ -183,6 +183,15 @@ pub async fn fetch(version: &str) -> Result<()> {
     let digest = checksum(&fs::read_to_string(sums.path())?)?;
     let temporary = tempfile::NamedTempFile::new_in(directory)?;
     download(version, ASSET, temporary.path(), MAX_SIZE).await?;
+    stage_verified(temporary, directory, version, digest).await
+}
+
+async fn stage_verified(
+    temporary: tempfile::NamedTempFile,
+    directory: &Path,
+    version: &str,
+    digest: [u8; 32],
+) -> Result<()> {
     let bytes = fs::read(temporary.path())?;
     ensure!(bytes.len() as u64 <= MAX_SIZE, "release exceeds size limit");
     ensure!(
@@ -192,9 +201,12 @@ pub async fn fetch(version: &str) -> Result<()> {
     temporary
         .as_file()
         .set_permissions(fs::Permissions::from_mode(0o755))?;
+    temporary.as_file().sync_all()?;
+    // Linux refuses to execute an inode with an open writable descriptor.
+    let temporary = temporary.into_temp_path();
     let output = tokio::time::timeout(
         Duration::from_secs(5),
-        Command::new(temporary.path())
+        Command::new(&temporary)
             .arg("--version")
             .kill_on_drop(true)
             .output(),
@@ -206,7 +218,6 @@ pub async fn fetch(version: &str) -> Result<()> {
                 == format!("kindle-opendisplay {version}"),
         "release binary reported an unexpected version"
     );
-    temporary.as_file().sync_all()?;
     temporary.persist_noclobber(directory.join(STAGED))?;
     File::open(directory)?.sync_all()?;
     Ok(())
@@ -230,6 +241,19 @@ mod tests {
         assert_eq!(checksum(&checksums)?, [0xab; 32]);
         assert!(checksum(&checksums.replace(ASSET, "another-file")).is_err());
         assert!(checksum(&checksums.repeat(2)).is_err());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn a_verified_download_can_be_executed_and_staged() -> Result<()> {
+        use std::io::Write as _;
+        let directory = tempfile::tempdir()?;
+        let path = directory.path();
+        let mut temporary = tempfile::NamedTempFile::new_in(path)?;
+        let content = b"#!/bin/sh\nprintf 'kindle-opendisplay 0.9.2\\n'\n";
+        temporary.write_all(content)?;
+        stage_verified(temporary, path, "0.9.2", Sha256::digest(content).into()).await?;
+        assert_eq!(fs::read(path.join(STAGED))?, content);
         Ok(())
     }
 

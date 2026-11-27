@@ -113,7 +113,7 @@ for the sleep and external-power settings.
 
 ## Update the receiver
 
-Install v0.9.1 once using the [Kindle setup guide](opendisplay-ble.md#install-on-the-kindle)
+Install v0.9.2 once using the [Kindle setup guide](opendisplay-ble.md#install-on-the-kindle)
 to enable updates. The **OpenDisplay receiver** update entity compares the
 installed version over authenticated BLE with stable GitHub releases.
 
