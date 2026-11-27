@@ -64,7 +64,8 @@ still works normally. The override persists across receiver restarts.
 
 ## Reboot
 
-The **Reboot into Inkwell** button restarts the device into Inkwell.
+Both reboot buttons appear under Diagnostics. **Reboot into Inkwell**
+restarts the device into Inkwell.
 **Reboot into Kindle OS** selects Amazon's operating system for one boot.
 The next normal reboot from Kindle OS returns to Inkwell if its boot hook
 is enabled. The BLE buttons are available while the Inkwell receiver is

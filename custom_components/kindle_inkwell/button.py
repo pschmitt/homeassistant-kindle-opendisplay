@@ -24,7 +24,7 @@ class KindleRebootButton(KindleEntity, ButtonEntity):
     """Request a restart into the selected Kindle environment."""
 
     _attr_device_class = ButtonDeviceClass.RESTART
-    _attr_entity_category = EntityCategory.CONFIG
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator, key, *, stock):
         """Choose the next operating environment."""
