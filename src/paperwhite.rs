@@ -6,6 +6,7 @@ use std::io::{self, Read, Write};
 use std::os::fd::AsRawFd;
 use std::path::Path;
 use std::ptr;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::thread;
 use std::time::Duration;
 
@@ -79,7 +80,25 @@ impl Drop for Radio {
     }
 }
 
-/// Draw a packed monochrome image and wait for a full refresh.
+/// Frames between flashing full refreshes; 1 flashes every frame, 0 only the first.
+static FULL_REFRESH_EVERY: AtomicU32 = AtomicU32::new(1);
+static FRAMES: AtomicU32 = AtomicU32::new(0);
+
+/// Set how often a frame uses a flashing full refresh instead of REAGL.
+pub fn set_full_refresh_every(frames: u32) {
+    FULL_REFRESH_EVERY.store(frames, Ordering::Relaxed);
+}
+
+/// The first frame, and every `every`-th after it, clears ghosting with a flash.
+fn full_refresh(frame: u32, every: u32) -> bool {
+    frame == 0 || (every != 0 && frame.is_multiple_of(every))
+}
+
+/// Draw a packed monochrome image and wait for the panel update.
+///
+/// Most frames use REAGL as a partial update, which redraws only changed
+/// pixels without the black and white flash. A periodic GC16 full refresh
+/// clears any ghosting.
 ///
 /// # Errors
 ///
@@ -163,9 +182,19 @@ pub fn render(frame: &[u8]) -> io::Result<()> {
     let mut marker = [0; 4];
     File::open("/dev/urandom")?.read_exact(&mut marker)?;
     let marker = u32::from_ne_bytes(marker) | 0x8000_0000;
+    const GC16: u32 = 2;
+    const REAGL: u32 = 8;
+    const PARTIAL: u32 = 0;
+    const FULL: u32 = 1;
+    let frame = FRAMES.fetch_add(1, Ordering::Relaxed);
+    let (waveform, mode) = if full_refresh(frame, FULL_REFRESH_EVERY.load(Ordering::Relaxed)) {
+        (GC16, FULL)
+    } else {
+        (REAGL, PARTIAL)
+    };
     let mut update = [0u32; 20];
-    // Region, GC16 waveform, full update, marker, ambient temperature.
-    update[..8].copy_from_slice(&[0, 0, width, height, 2, 1, marker, 0x1000]);
+    // Region, waveform, update mode, marker, ambient temperature.
+    update[..8].copy_from_slice(&[0, 0, width, height, waveform, mode, marker, 0x1000]);
     let mut completed = [marker, 0u32];
     // SAFETY: SEND_UPDATE copies exactly 80 bytes from the aligned update
     // buffer following the PW4 driver ABI. Both the buffer and file remain live.
@@ -180,5 +209,22 @@ fn ioctl_result(result: libc::c_int) -> io::Result<()> {
         Err(io::Error::last_os_error())
     } else {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::full_refresh;
+
+    #[test]
+    fn full_refresh_follows_the_interval() {
+        let flashes = |every| {
+            (0..12)
+                .filter(|&frame| full_refresh(frame, every))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(flashes(1), (0..12).collect::<Vec<_>>());
+        assert_eq!(flashes(5), [0, 5, 10]);
+        assert_eq!(flashes(0), [0]);
     }
 }

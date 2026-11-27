@@ -223,6 +223,7 @@ async fn main() -> Result<()> {
     if autostart && !settings.autostart {
         return Ok(());
     }
+    paperwhite::set_full_refresh_every(settings.full_refresh_every);
     let key = if settings.controls {
         let explicit = key_path.is_some();
         match fs::read_to_string(key_path.unwrap_or_else(|| directory.join("control.key"))) {

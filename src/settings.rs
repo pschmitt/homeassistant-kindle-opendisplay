@@ -17,6 +17,7 @@ pub struct Settings {
     pub commands: Commands,
     pub sleep_after_seconds: u32,
     pub sleep_for_seconds: u32,
+    pub full_refresh_every: u32,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -48,6 +49,7 @@ impl Default for Settings {
             commands: Commands::default(),
             sleep_after_seconds: 0,
             sleep_for_seconds: 300,
+            full_refresh_every: 10,
         }
     }
 }
@@ -85,6 +87,10 @@ impl Settings {
         ensure!(
             (15..=86400).contains(&settings.sleep_for_seconds),
             "sleep_for_seconds must be between 15 and 86400"
+        );
+        ensure!(
+            settings.full_refresh_every <= 1000,
+            "full_refresh_every must be between 0 and 1000"
         );
         ensure!(!settings.commands.user.is_empty(), "commands.user is empty");
         if settings.commands.enabled {

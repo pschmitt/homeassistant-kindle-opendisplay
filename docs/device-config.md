@@ -18,6 +18,7 @@ cpu_latency_us = 0
 stay_awake_on_external_power = true
 sleep_after_seconds = 0
 sleep_for_seconds = 300
+full_refresh_every = 10
 
 [commands]
 enabled = false
@@ -35,6 +36,7 @@ user = "nobody"
 | `stay_awake_on_external_power` | `true` | Boolean. Defer timed sleep on USB or a charger. Also inhibits automatic idle sleep in the patched Inkwell Home. |
 | `sleep_after_seconds` | `0` | Integer, `0` or 30–86,400. Zero disables OpenDisplay timed suspend. Other values set the quiet period after launch or the last completed frame. |
 | `sleep_for_seconds` | `300` | Integer, 15–86,400. Sets the RTC wake interval when OpenDisplay timed sleep is enabled. |
+| `full_refresh_every` | `10` | Integer, 0–1,000. Frames normally use a REAGL partial update, which redraws only changed pixels without the black-and-white flash. The first frame after launch and every Nth frame after it use a flashing GC16 full refresh to clear ghosting. `1` flashes every frame, as before; `0` flashes only the first. |
 | `commands.enabled` | `false` | Boolean. Allow authenticated, encrypted command execution with `commands.user`. |
 | `commands.user` | `"nobody"` | Nonempty local username. When execution is enabled, both the account and its primary group must be non-root. |
 
