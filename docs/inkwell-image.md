@@ -17,7 +17,7 @@ nix build '.#inkwell-pw4'
 `result/Inkwell-Paperwhite4-OpenDisplay.zip` contains `linux/` and
 `documents/` in the upstream release layout. The archive includes the
 receiver and its startup hook. The first run generates the BLE identity
-and shared control key inside the Inkwell filesystem. Add your own Wi-Fi
+and shared control key and writes the default TOML settings inside the Inkwell filesystem. Add your own Wi-Fi
 and SSH configuration using the upstream instructions. Device keys,
 addresses, and user configuration belong on the Kindle.
 

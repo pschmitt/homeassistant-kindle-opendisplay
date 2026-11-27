@@ -5,6 +5,8 @@ import os
 import secrets
 from pathlib import Path
 
+from settings import install_settings
+
 
 def provision(directory):
     """Initialize missing device files without replacing an existing identity."""
@@ -31,6 +33,7 @@ def provision(directory):
         ) as stream:
             stream.write(secrets.token_hex(32) + "\n")
     key.chmod(0o600)
+    install_settings(directory)
 
     return config, key
 
