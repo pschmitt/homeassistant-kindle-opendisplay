@@ -149,6 +149,11 @@
       "reboot_kindle_os": {
         "name": "Reboot into Kindle OS"
       }
+    },
+    "image": {
+      "screen": {
+        "name": "Screen"
+      }
     }
   },
   "exceptions": {

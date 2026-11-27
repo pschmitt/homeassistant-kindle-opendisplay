@@ -2,7 +2,8 @@
 
 import logging
 import re
-from datetime import timedelta
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from homeassistant.components.bluetooth import (
@@ -28,6 +29,15 @@ from .const import (
 BTHOME_UUID = "0000fcd2-0000-1000-8000-00805f9b34fb"
 
 
+@dataclass(frozen=True)
+class Screen:
+    """A frame uploaded to the panel and the orientation it was drawn for."""
+
+    image: bytes
+    orientation: str
+    updated: datetime
+
+
 def parse_battery_announcement(data):
     """Decode the unencrypted BTHome fields emitted by this receiver."""
     if len(data) not in (3, 5) or data[:2] != b"\x40\x01" or data[2] > 100:
@@ -40,8 +50,8 @@ def parse_battery_announcement(data):
     return data[2], charging
 
 
-def client_for_device(hass, device_id):
-    """Find the BLE client for a Kindle or its linked OpenDisplay device."""
+def coordinator_for_device(hass, device_id):
+    """Find the coordinator for a Kindle or its linked OpenDisplay device."""
     device = dr.async_get(hass).async_get(device_id)
     if not device:
         return None
@@ -54,9 +64,15 @@ def client_for_device(hass, device_id):
         address = entry.data.get(CONF_BLUETOOTH_ADDRESS)
         if address and address.upper() in addresses:
             coordinator = getattr(entry, "runtime_data", None)
-            if coordinator and coordinator.ble and coordinator.client:
-                return coordinator.client
+            if coordinator and coordinator.ble:
+                return coordinator
     return None
+
+
+def client_for_device(hass, device_id):
+    """Find the BLE client for a Kindle or its linked OpenDisplay device."""
+    coordinator = coordinator_for_device(hass, device_id)
+    return coordinator.client if coordinator else None
 
 
 class KindleCoordinator(DataUpdateCoordinator[KindleState]):
@@ -77,6 +93,8 @@ class KindleCoordinator(DataUpdateCoordinator[KindleState]):
         self.battery_announcement = None
         self.last_battery_broadcast = None
         self.last_telemetry_poll = None
+        # The last frame sent through kindle_inkwell.upload_image.
+        self.screen = None
         self.address = address = entry.data[CONF_BLUETOOTH_ADDRESS]
         self.device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.unique_id or entry.entry_id)},
@@ -86,6 +104,12 @@ class KindleCoordinator(DataUpdateCoordinator[KindleState]):
             model=entry.data["model"],
             sw_version=entry.data["firmware"],
         )
+
+    @callback
+    def async_set_screen(self, image, orientation):
+        """Remember the frame just shown on the panel."""
+        self.screen = Screen(image, orientation, utcnow())
+        self.async_update_listeners()
 
     @callback
     def async_listen_for_battery(self, entry):

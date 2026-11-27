@@ -46,6 +46,11 @@
       "reboot_kindle_os": {
         "default": "mdi:restart"
       }
+    },
+    "image": {
+      "screen": {
+        "default": "mdi:monitor-screenshot"
+      }
     }
   }
 }

@@ -94,6 +94,7 @@ ID normally includes the Kindle's device name.
 | Switch | **Prevent sleep** | Keep the receiver awake over BLE. The override persists across receiver restarts. |
 | Number | **Frontlight brightness** | Slider from 0% (off) to 100% of the driver maximum. |
 | Select | **Orientation** | HA-stored portrait or landscape hint for your dashboard. Defaults to portrait and can be set while the Kindle is offline. |
+| Image | **Screen** | The last frame sent with `kindle_inkwell.upload_image`, turned upright for landscape. Kept in memory, so it is empty after an HA restart until the next upload. |
 | Event | **Event** | New `wake` event after HA observes a recorded timed-suspend resume. Attributes give the device's wake time and suspended seconds. |
 | Button | **Reboot into Inkwell** | Restart into Inkwell over BLE. |
 | Button | **Reboot into Kindle OS** | Boot Amazon's OS once over BLE. Its next normal reboot returns to Inkwell if the boot hook is enabled. |
@@ -127,6 +128,8 @@ media image and upload options as `opendisplay.upload_image`. Select the
 OpenDisplay device on the same Bluetooth address as the Kindle Inkwell
 entry. This action holds the Kindle's BLE lock while calling OpenDisplay,
 so status polls and control commands wait for the image transfer.
+After a successful upload of a local media item, the **Screen** image
+entity shows that frame, so a dashboard can preview the panel.
 
 ## Execute a command over BLE
 
