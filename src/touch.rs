@@ -11,7 +11,7 @@ use std::{
     time::Duration,
 };
 use tokio::{
-    io::unix::AsyncFd,
+    io::{Interest, unix::AsyncFd},
     time::{Instant, sleep_until},
 };
 
@@ -138,7 +138,9 @@ async fn input() -> Result<()> {
         .read(true)
         .custom_flags(libc::O_NONBLOCK)
         .open(touchscreen()?)?;
-    let device = AsyncFd::new(device)?;
+    // SAFETY: AsyncFd owns the open File. The descriptor remains valid and
+    // unchanged until Tokio deregisters it and drops the File.
+    let device = unsafe { AsyncFd::register_with_interest(device, Interest::READABLE) }?;
     // Linux evdev uses the kernel's native long width in the event timestamp.
     const LONG: usize = size_of::<libc::c_long>();
     const HEADER: usize = 2 * LONG;
@@ -154,12 +156,13 @@ async fn input() -> Result<()> {
             }
             readiness = device.readable() => {
                 let mut ready = readiness?;
-                let Ok(result) = ready.try_io(|fd| (&*fd.get_ref()).read(&mut buffer)) else {
+                let Ok(result) = ready.try_io(|fd| fd.get_ref().read(&mut buffer)) else {
                     continue;
                 };
                 let length = result?;
-                ensure!(length != 0 && length % EVENT_SIZE == 0, "incomplete touchscreen input event");
-                for bytes in buffer[..length].chunks_exact(EVENT_SIZE) {
+                let (events, remainder) = buffer[..length].as_chunks::<EVENT_SIZE>();
+                ensure!(!events.is_empty() && remainder.is_empty(), "incomplete touchscreen input event");
+                for bytes in events {
                     let kind = u16::from_ne_bytes(bytes[HEADER..HEADER + 2].try_into()?);
                     let code = u16::from_ne_bytes(bytes[HEADER + 2..HEADER + 4].try_into()?);
                     let value = i32::from_ne_bytes(bytes[HEADER + 4..].try_into()?);
