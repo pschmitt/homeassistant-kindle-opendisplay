@@ -21,3 +21,16 @@ BLE link and verifies a compressed upload, reconnect, authenticated
 controls, and rejection of a replayed request. The new Inkwell image
 includes the Rust launcher. Existing installations can select it with the
 post-installer's `--receiver-binary` option.
+
+
+## Idle CPU use
+
+The initial current-thread Tokio build continuously called `epoll_pwait`
+with a zero timeout on the Paperwhite 4 and saturated its single core.
+The single-worker runtime keeps the BLE futures on the main thread and
+drives I/O on a worker. A bounded device comparison recorded zero
+receiver CPU ticks over 10 idle seconds with that runtime. A subsequent
+50-second run crossed the advertisement refresh interval and recorded one
+receiver CPU tick. The Python fallback used about 1.2% total CPU over 15 seconds with the same idle
+latency limit. The comparison was on external power and measured CPU
+activity, not battery life.

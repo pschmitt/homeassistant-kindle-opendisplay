@@ -122,7 +122,9 @@ impl Identity {
     }
 }
 
-#[tokio::main(flavor = "current_thread")]
+// Keep the HCI and GATT futures on the main thread. A separate I/O worker
+// avoids the current-thread scheduler's idle polling observed on Lab126 4.1.15.
+#[tokio::main(flavor = "multi_thread", worker_threads = 1)]
 async fn main() -> Result<()> {
     let mut args = std::env::args_os().skip(1).peekable();
     if args.peek().is_some_and(|arg| arg == "--version") {

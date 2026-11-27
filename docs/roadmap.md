@@ -6,7 +6,7 @@
 - [x] Build the Rust receiver with Nix and [Crane](https://github.com/ipetkov/crane).
   Add native checks and an ARMv7 Linux package for the Kindle, with separate
   build outputs for host tests and target binaries.
-- [ ] Onboard the flake into Circus once the receiver package and checks
+- [x] Onboard the flake into Circus once the receiver package and checks
   exist. Publish reproducible ARMv7 artifacts from successful builds.
 - [ ] Build ready-made Inkwell images with Nix. Pin upstream Inkwell, apply
   the receiver and startup hook as a reproducible overlay or patch, and
