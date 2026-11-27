@@ -27,6 +27,10 @@ from .const import (
 )
 
 BTHOME_UUID = "0000fcd2-0000-1000-8000-00805f9b34fb"
+OPENDISPLAY_COMPANY = 0x2446
+# External power flags in the last byte of OpenDisplay's dynamic block.
+POWER_FLAGS = 10
+POWER_REPORTED = 0x80
 
 
 @dataclass(frozen=True)
@@ -48,6 +52,13 @@ def parse_battery_announcement(data):
             return None
         charging = bool(data[4])
     return data[2], charging
+
+
+def parse_power_announcement(data):
+    """Decode the receiver's external power flag, or None if not reported."""
+    if len(data) <= POWER_FLAGS or not data[POWER_FLAGS] & POWER_REPORTED:
+        return None
+    return bool(data[POWER_FLAGS] & 1)
 
 
 def coordinator_for_device(hass, device_id):
@@ -91,6 +102,7 @@ class KindleCoordinator(DataUpdateCoordinator[KindleState]):
         self.client = None
         self._wifi_connection_conflict = None
         self.battery_announcement = None
+        self.power_announcement = None
         self.last_battery_broadcast = None
         self.last_telemetry_poll = None
         # The last frame sent through kindle_inkwell.upload_image.
@@ -139,6 +151,12 @@ class KindleCoordinator(DataUpdateCoordinator[KindleState]):
         )
         changed = announcement != self.battery_announcement
         self.battery_announcement = announcement
+        power = parse_power_announcement(
+            info.manufacturer_data.get(OPENDISPLAY_COMPANY, b"")
+        )
+        if power != self.power_announcement:
+            self.power_announcement = power
+            changed = True
         if announcement is not None:
             now = utcnow()
             if (
@@ -152,8 +170,9 @@ class KindleCoordinator(DataUpdateCoordinator[KindleState]):
 
     @callback
     def _async_battery_unavailable(self, _info):
-        if self.battery_announcement is not None:
+        if self.battery_announcement is not None or self.power_announcement is not None:
             self.battery_announcement = None
+            self.power_announcement = None
             self.async_update_listeners()
 
     async def _async_init_client(self):

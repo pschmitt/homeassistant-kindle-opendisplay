@@ -3,6 +3,18 @@ use std::path::Path;
 
 const BATTERY: &str = "/sys/class/power_supply/bd71827_bat";
 const DISPLAY_UUID: [u8; 4] = [3, 3, 0x46, 0x24];
+/// Index of the external-power flags within the OpenDisplay manufacturer
+/// record: the last byte of its 11-byte dynamic block, which this receiver
+/// leaves otherwise unused. The BTHome record has no room left in the
+/// 31-byte advertisement.
+const POWER_FLAGS: usize = 4 + 10;
+/// Set when the flags byte carries a reading; bit 0 is then AC online.
+const POWER_REPORTED: u8 = 0x80;
+
+/// Encode the external power state for the passive advertisement.
+pub fn power_flags(online: Option<bool>) -> u8 {
+    online.map_or(0, |online| POWER_REPORTED | u8::from(online))
+}
 
 pub fn cpu_temperature() -> Option<i32> {
     let zone = fs::read_dir("/sys/class/thermal")
@@ -95,6 +107,7 @@ pub fn packets(name: &str, battery: bool, display: bool) -> (Vec<u8>, Vec<u8>) {
         }
         let mut manufacturer = [0; 18];
         manufacturer[..4].copy_from_slice(&[0x11, 0xff, 0x46, 0x24]);
+        manufacturer[POWER_FLAGS] = power_flags(external_power());
         manufacturer[15] = temperature();
         data.extend(manufacturer);
     }
@@ -102,4 +115,23 @@ pub fn packets(name: &str, battery: bool, display: bool) -> (Vec<u8>, Vec<u8>) {
         data.extend(battery_data());
     }
     (data, scan)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn power_flags_mark_reported_state() {
+        assert_eq!(power_flags(None), 0);
+        assert_eq!(power_flags(Some(false)), 0x80);
+        assert_eq!(power_flags(Some(true)), 0x81);
+    }
+
+    #[test]
+    fn advertisement_fits_with_power_flags() {
+        let (data, scan) = packets("ODKindlePaperwhite4", true, true);
+        assert!(data.len() <= 31, "advertisement is {} bytes", data.len());
+        assert!(scan.len() <= 31, "scan response is {} bytes", scan.len());
+    }
 }

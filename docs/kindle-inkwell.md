@@ -47,12 +47,14 @@ authenticated and encrypted. Keep the key out of source control.
 Kindle Inkwell listens to the receiver's BTHome advertisements automatically.
 The existing **Battery** and **Charging** entities use the announced readings
 when available. Older receivers still provide readings through the
-authenticated connection. The two advertised values are visible to nearby
-BLE scanners. SSID, BSSID, the current Wi-Fi IPv4 address, and control commands use the
 authenticated connection. **Plugged in** reports whether USB or a charger
-supplies power, even at 100% when **Charging** is off. Update the Kindle
-receiver to enable this sensor. The IP address is unknown while Wi-Fi is
-disconnected.
+supplies power, even at 100% when **Charging** is off. The receiver also
+announces it in the last byte of the OpenDisplay manufacturer record's
+dynamic block (bit 7 set when reported, bit 0 for power), so it stays
+current during timed sleep when polls fail. These advertised values are
+visible to nearby BLE scanners. SSID, BSSID, the current Wi-Fi IPv4
+address, and control commands use the authenticated connection. The IP
+address is unknown while Wi-Fi is disconnected.
 
 The standalone Home Assistant BTHome entry is optional and creates an
 additional device record. If you previously added it, remove that entry
@@ -87,7 +89,7 @@ ID normally includes the Kindle's device name.
 | Sensor | **Last wake** | Time of the most recent recorded timed-suspend resume. |
 | Sensor | **Last suspend duration** | Duration of that suspend in seconds. |
 | Binary sensor | **Charging** | The battery is actively charging. |
-| Binary sensor | **Plugged in** | USB or charger power is present, including when charging stops at 100%. |
+| Binary sensor | **Plugged in** | USB or charger power is present, including when charging stops at 100%. Uses the passive advertisement when the receiver sends it. |
 | Switch | **Frontlight** | Turn the light off or restore the last nonzero level. |
 | Switch | **Wi-Fi** | Disconnect or reassociate Wi-Fi over BLE. |
 | Switch | **SSH (Wi-Fi)** | Toggle Inkwell's Wi-Fi SSH listener on port 2022 over BLE. |

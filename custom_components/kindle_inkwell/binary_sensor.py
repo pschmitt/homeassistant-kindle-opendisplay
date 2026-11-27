@@ -49,10 +49,15 @@ class KindlePluggedIn(KindleEntity, BinarySensorEntity):
 
     @property
     def available(self):
-        """Older receivers may lack the external power field."""
+        """Stay available on the passive flag; older receivers may lack both."""
+        if self.coordinator.power_announcement is not None:
+            return True
         return super().available and self.is_on is not None
 
     @property
     def is_on(self):
+        """Prefer the passively announced power state, which survives sleep."""
+        if (plugged_in := self.coordinator.power_announcement) is not None:
+            return plugged_in
         if state := self.coordinator.data:
             return state.plugged_in
