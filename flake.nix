@@ -31,8 +31,6 @@
             path: type:
             craneLib.filterCargoSources path type
             || builtins.elem (baseNameOf path) [
-              "start"
-              "frontlight"
               "boot-hook.sh"
               "previous-boot-hook.sh"
               "legacy-boot-hook.sh"

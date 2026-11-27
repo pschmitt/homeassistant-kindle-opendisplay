@@ -30,10 +30,11 @@ Reload the running launcher with
 `kill -HUP "$(cat /run/opendisplay.pid)"`. The installer saves the
 previous init script as `/sbin/own-init.pre-opendisplay`.
 
-The receiver, sleep supervisor, installer, and first-boot provisioning
-run in Rust. A shell launcher hands the display between OpenDisplay and
-Inkwell Home. Only the legacy SSH `frontlight info` diagnostics command
-uses Python on the OpenDisplay side. BLE diagnostics run in Rust.
+The Rust binary handles display ownership, sleep, installation, first-boot
+provisioning, and frontlight control. The installer creates `start` and
+`frontlight` as links to the binary, preserving the boot and legacy forced
+SSH entry points. The legacy `frontlight info` command and BLE diagnostics
+share the same Rust telemetry code.
 
 ## Device settings
 

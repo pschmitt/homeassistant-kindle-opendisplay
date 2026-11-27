@@ -72,7 +72,8 @@ pkgs.stdenvNoCC.mkDerivation {
     bash -n src/rootfs/sbin/own-init
     mkdir -p src/rootfs/opt/opendisplay
     install -m 0755 ${receiver}/bin/kindle-opendisplay src/rootfs/opt/opendisplay/
-    install -m 0755 ${overlay}/start ${overlay}/frontlight src/rootfs/opt/opendisplay/
+    ln -s kindle-opendisplay src/rootfs/opt/opendisplay/start
+    ln -s kindle-opendisplay src/rootfs/opt/opendisplay/frontlight
     touch src/rootfs/opt/opendisplay/autostart
   '';
 
@@ -101,7 +102,8 @@ pkgs.stdenvNoCC.mkDerivation {
     debugfs -R 'stat /opt/opendisplay/control.key' out/alpine.img 2>&1 | grep -F 'File not found'
     debugfs -R 'stat /opt/opendisplay/device.json' out/alpine.img 2>&1 | grep -F 'File not found'
     debugfs -R 'cat /sbin/own-init' out/alpine.img | grep -F 'kindle-opendisplay --setting autostart'
-    debugfs -R 'cat /opt/opendisplay/start' out/alpine.img | grep -F 'kindle-opendisplay --provision'
+    debugfs -R 'stat /opt/opendisplay/start' out/alpine.img | grep -F 'Fast link dest: "kindle-opendisplay"'
+    debugfs -R 'stat /opt/opendisplay/frontlight' out/alpine.img | grep -F 'Fast link dest: "kindle-opendisplay"'
     runHook postBuild
   '';
 

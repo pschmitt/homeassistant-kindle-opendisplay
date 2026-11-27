@@ -1,7 +1,7 @@
 # Repository guidance
 
 - `src/` contains the Rust Kindle receiver and installer.
-  `opendisplay/` contains the launcher and boot hooks. `custom_components/kindle_inkwell/`
+  `opendisplay/` contains the Inkwell boot hooks. `custom_components/kindle_inkwell/`
   contains the Home Assistant integration.
 - Keep the README and relevant pages under `docs/` up to date in the same
   change as setup, firmware, BLE, or Home Assistant behavior. Update the

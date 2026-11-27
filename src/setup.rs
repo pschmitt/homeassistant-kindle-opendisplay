@@ -3,8 +3,7 @@ use anyhow::{Context, Result, bail, ensure};
 use std::ffi::OsString;
 use std::fs::{self, File, OpenOptions};
 use std::io::{ErrorKind, Read, Write};
-use std::os::unix::fs::PermissionsExt;
-use std::os::unix::process::CommandExt;
+use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::Path;
 use std::process::Command;
 use tempfile::NamedTempFile;
@@ -168,14 +167,11 @@ fn install_into(init: &Path, directory: &Path, source: &Path, latency: Option<i3
     std::io::copy(&mut File::open(source)?, &mut staged_binary)?;
     staged_binary.as_file().sync_all()?;
     staged_binary.persist(&binary)?;
-    for (name, contents) in [
-        ("start", include_bytes!("../opendisplay/start").as_slice()),
-        (
-            "frontlight",
-            include_bytes!("../opendisplay/frontlight").as_slice(),
-        ),
-    ] {
-        write_file(&directory.join(name), 0o755, contents, true)?;
+    for name in ["start", "frontlight"] {
+        let temporary = tempfile::tempdir_in(directory)?;
+        let link = temporary.path().join(name);
+        symlink("kindle-opendisplay", &link)?;
+        fs::rename(link, directory.join(name))?;
     }
     if patched != original {
         write_file(
@@ -201,22 +197,6 @@ pub fn setting(feature: &str) -> Result<bool> {
         "stay_awake_on_external_power" => Ok(settings.stay_awake_on_external_power),
         _ => bail!("unknown OpenDisplay feature"),
     }
-}
-
-pub fn launch(args: impl IntoIterator<Item = OsString>) -> Result<()> {
-    for signal in [libc::SIGHUP, libc::SIGINT, libc::SIGTERM] {
-        // SAFETY: the signal numbers are valid and SIG_DFL is a permitted disposition.
-        let previous = unsafe { libc::signal(signal, libc::SIG_DFL) };
-        ensure!(
-            previous != libc::SIG_ERR,
-            "restore launcher signal disposition"
-        );
-    }
-    Err(Command::new(Path::new(DIRECTORY).join("start"))
-        .args(args)
-        .env("OPENDISPLAY_SIGNALS_READY", "1")
-        .exec())
-    .context("start OpenDisplay")
 }
 
 #[cfg(test)]
@@ -261,7 +241,12 @@ mod tests {
             fs::read(target.join("kindle-opendisplay"))?,
             b"receiver image"
         );
-        assert!(target.join("start").is_file());
+        for name in ["start", "frontlight"] {
+            assert_eq!(
+                fs::read_link(target.join(name))?,
+                Path::new("kindle-opendisplay")
+            );
+        }
         assert!(target.join("autostart").is_file());
         assert_eq!(Settings::load(&target)?.cpu_latency_us, 50);
 

@@ -1,6 +1,8 @@
 mod actions;
 mod advertising;
 mod control;
+mod frontlight;
+mod launcher;
 mod settings;
 mod setup;
 mod sleep;
@@ -128,7 +130,24 @@ impl Identity {
 // avoids the current-thread scheduler's idle polling observed on Lab126 4.1.15.
 #[tokio::main(flavor = "multi_thread", worker_threads = 1)]
 async fn main() -> Result<()> {
-    let mut args = std::env::args_os().skip(1).peekable();
+    let mut args = std::env::args_os();
+    let invocation = args.next();
+    match invocation
+        .as_deref()
+        .and_then(|path| Path::new(path).file_name())
+        .and_then(|name| name.to_str())
+    {
+        Some("start") => {
+            let code = launcher::launch(args).await?;
+            std::process::exit(code);
+        }
+        Some("frontlight") => {
+            let code = frontlight::forced_command().await?;
+            std::process::exit(code);
+        }
+        _ => {}
+    }
+    let mut args = args.peekable();
     match args.peek().and_then(|arg| arg.to_str()) {
         Some("--install") => return setup::install(args.skip(1)),
         Some("--provision") => {
@@ -150,7 +169,10 @@ async fn main() -> Result<()> {
                 }
             }
         }
-        Some("--launch") => return setup::launch(args.skip(1)),
+        Some("--launch") => {
+            let code = launcher::launch(args.skip(1)).await?;
+            std::process::exit(code);
+        }
         _ => {}
     }
     if args.peek().is_some_and(|arg| arg == "--version") {

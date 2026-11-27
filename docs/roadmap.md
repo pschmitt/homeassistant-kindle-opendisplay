@@ -12,3 +12,17 @@
   keep per-device keys and configuration outside the image. Validate boot,
   rollback, and Home Assistant compatibility on a Paperwhite 4 before
   publishing the images.
+
+## Home Assistant updates
+
+- [ ] Report the installed OpenDisplay release over BLE, separately from
+  Kindle OS and Inkwell versions. Stamp the release version into the ARMv7
+  binary in CI.
+- [ ] Add a Home Assistant update entity for the OpenDisplay receiver.
+  Compare the device's version with the latest stable GitHub release.
+- [ ] Add an authenticated BLE update action that tells the Kindle to
+  fetch the selected release over Wi-Fi. Verify the release artifact
+  before running the built-in installer. Preserve device data and keep a
+  rollback copy until the receiver reconnects and reports the new version.
+- [ ] Evaluate full Inkwell image updates separately. They replace the
+  root filesystem and need a boot and rollback strategy of their own.

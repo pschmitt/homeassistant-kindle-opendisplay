@@ -2,10 +2,12 @@
 
 use crate::{
     control::{Authenticated, Request},
+    frontlight,
     settings::{Commands, PREVENT_SLEEP},
 };
 use anyhow::{Context, Result, ensure};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
+use serde::Serialize;
 use serde_json::{Value, json};
 use std::os::unix::process::CommandExt as _;
 use std::{
@@ -24,7 +26,6 @@ use tokio::{
 };
 
 const ROOT: &str = "/mnt/us/linux";
-const FRONTLIGHT: &str = "/opt/opendisplay/frontlight";
 const SSH_WIFI: &str = "/usr/local/bin/ssh-wifi";
 const WPA: &str = "/sbin/wpa_cli";
 const MAX_STREAM: usize = 128;
@@ -53,7 +54,7 @@ impl<'a> Actions<'a> {
                     Value::Null
                 }
             },
-            Request::FrontlightLevel(level) => match self.set_frontlight(*level).await {
+            Request::FrontlightLevel(level) => match self.set_frontlight(*level) {
                 Ok(level) => json!(level),
                 Err(error) => {
                     eprintln!("Kindle frontlight request failed: {error:#}");
@@ -75,12 +76,12 @@ impl<'a> Actions<'a> {
         }
     }
 
-    async fn set_frontlight(&self, level: u16) -> Result<u16> {
+    fn set_frontlight(&self, level: u16) -> Result<u16> {
         ensure!(
             self.paperwhite,
             "hardware operations require the Paperwhite transport"
         );
-        command(FRONTLIGHT, &[], &format!("level {level}"), 8).await?;
+        frontlight::set(level)?;
         Ok(level)
     }
 
@@ -92,7 +93,7 @@ impl<'a> Actions<'a> {
         match opcode {
             0 => {}
             1 | 2 => {
-                command(FRONTLIGHT, &[], if opcode == 1 { "off" } else { "on" }, 8).await?;
+                frontlight::toggle(opcode == 2)?;
             }
             3 | 4 => {
                 let enabled = opcode == 4;
@@ -214,6 +215,46 @@ async fn telemetry() -> Result<Vec<Value>> {
         .context("read frontlight")?
         .parse::<u32>()?;
     let wifi = !Path::new(ROOT).join("wifi.off").exists();
+    let info = device_info(wifi).await;
+    let ssh = command(SSH_WIFI, &["status"], "", 8).await? == "on";
+    Ok(vec![
+        json!(light > 0),
+        json!(capacity),
+        json!(charge == "Charging"),
+        json!(charge),
+        json!(info.wifi),
+        json!(info.rssi_dbm),
+        json!(info.device_type),
+        json!(info.kindle_firmware),
+        json!(info.kindle_build),
+        json!(info.kernel_release),
+        json!(info.alpine_version),
+        json!(wifi),
+        json!(ssh),
+        json!(info.ssid),
+        json!(info.bssid),
+        json!(info.ip_address),
+        json!(crate::advertising::external_power()),
+        json!(Path::new(PREVENT_SLEEP).is_file()),
+    ])
+}
+
+#[derive(Serialize)]
+pub struct DeviceInfo {
+    device_type: &'static str,
+    wifi: String,
+    ssid: Option<String>,
+    bssid: Option<String>,
+    ip_address: Option<Ipv4Addr>,
+    wifi_mac: Option<String>,
+    rssi_dbm: Option<i32>,
+    kindle_firmware: Option<String>,
+    kindle_build: Option<String>,
+    kernel_release: Option<String>,
+    alpine_version: Option<String>,
+}
+
+pub async fn device_info(wifi: bool) -> DeviceInfo {
     let status = if wifi {
         command(WPA, &["-i", "wlan0", "status"], "", 2)
             .await
@@ -263,33 +304,31 @@ async fn telemetry() -> Result<Vec<Value>> {
                 .map(|version| version.trim_matches('"'))
         })
     });
-    let ssh = command(SSH_WIFI, &["status"], "", 8).await? == "on";
-    Ok(vec![
-        json!(light > 0),
-        json!(capacity),
-        json!(charge == "Charging"),
-        json!(charge),
-        json!(if !wifi {
+    DeviceInfo {
+        device_type: "Kindle Paperwhite 4 (10th generation)",
+        wifi: if !wifi {
             "off".into()
         } else if connected {
             "connected".into()
         } else {
             state.to_ascii_lowercase()
-        }),
-        json!(rssi),
-        json!("Kindle Paperwhite 4 (10th generation)"),
-        json!(firmware),
-        json!(build),
-        json!(read("/proc/sys/kernel/osrelease")),
-        json!(alpine),
-        json!(wifi),
-        json!(ssh),
-        json!(connected.then(|| status.get("ssid")).flatten()),
-        json!(connected.then(|| status.get("bssid")).flatten()),
-        json!(connected.then_some(ip).flatten()),
-        json!(crate::advertising::external_power()),
-        json!(Path::new(PREVENT_SLEEP).is_file()),
-    ])
+        },
+        ssid: status
+            .get("ssid")
+            .filter(|_| connected)
+            .map(|value| (*value).to_owned()),
+        bssid: status
+            .get("bssid")
+            .filter(|_| connected)
+            .map(|value| (*value).to_owned()),
+        ip_address: connected.then_some(ip).flatten(),
+        wifi_mac: read("/sys/class/net/wlan0/address").filter(|value| !value.is_empty()),
+        rssi_dbm: rssi,
+        kindle_firmware: firmware.map(str::to_owned),
+        kindle_build: build.map(str::to_owned),
+        kernel_release: read("/proc/sys/kernel/osrelease"),
+        alpine_version: alpine.map(str::to_owned),
+    }
 }
 
 fn diagnostics(include_wifi_mac: bool) -> Value {
