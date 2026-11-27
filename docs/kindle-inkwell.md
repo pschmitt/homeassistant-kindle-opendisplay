@@ -54,13 +54,23 @@ The standalone Home Assistant BTHome entry is optional and creates an
 additional device record. If you previously added it, remove that entry
 and ignore its rediscovery to keep a single pair of battery entities.
 
+## Connection diagnostics
+
+**Last telemetry poll** records the last successful active read. **Last
+battery broadcast** records the last observed BTHome battery advertisement,
+with updates limited to once a minute. Both keep their last value through a
+connection loss. If only the broadcast timestamp advances, the radio is
+still advertising while the active connection is failing. A quiet radio
+could mean the Kindle is asleep, out of range, or powered off.
+
 ## Prevent automatic sleep
 
-**Prevent sleep** is a diagnostic switch. The patched Inkwell image skips
-automatic idle sleep while the switch is on, including on battery. Turning
-the switch off restores the configured idle policy. By default the image
-already skips idle sleep on USB or a charger. A manual power-button press
-still works normally. The override persists across receiver restarts.
+**Prevent sleep** is a diagnostic switch. When Inkwell Home owns the panel,
+the patched image skips automatic idle sleep while the switch is on,
+including on battery. Turning the switch off restores the configured idle
+policy. By default the image already skips idle sleep on USB or a charger.
+Home still handles manual sleep. The override persists across receiver
+restarts. OpenDisplay mode keeps the receiver awake for incoming frames.
 
 ## Reboot
 

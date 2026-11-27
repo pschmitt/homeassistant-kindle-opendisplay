@@ -14,6 +14,7 @@ from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import CONNECTION_BLUETOOTH, DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util.dt import utcnow
 
 from .api import KindleBleClient, KindleClient, KindleError, KindleState, read_key
 from .const import (
@@ -68,11 +69,12 @@ class KindleCoordinator(DataUpdateCoordinator[KindleState]):
             config_entry=entry,
             name=DOMAIN,
             update_interval=timedelta(seconds=60),
-            always_update=False,
         )
         self.ble = CONF_BLUETOOTH_KEY_FILE in entry.data
         self.client = None
         self.battery_announcement = None
+        self.last_battery_broadcast = None
+        self.last_telemetry_poll = None
         self.address = address = entry.data[CONF_BLUETOOTH_ADDRESS]
         self.device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.unique_id or entry.entry_id)},
@@ -109,8 +111,17 @@ class KindleCoordinator(DataUpdateCoordinator[KindleState]):
         announcement = parse_battery_announcement(
             info.service_data.get(BTHOME_UUID, b"")
         )
-        if announcement != self.battery_announcement:
-            self.battery_announcement = announcement
+        changed = announcement != self.battery_announcement
+        self.battery_announcement = announcement
+        if announcement is not None:
+            now = utcnow()
+            if (
+                self.last_battery_broadcast is None
+                or now - self.last_battery_broadcast >= timedelta(minutes=1)
+            ):
+                self.last_battery_broadcast = now
+                changed = True
+        if changed:
             self.async_update_listeners()
 
     @callback
@@ -136,6 +147,8 @@ class KindleCoordinator(DataUpdateCoordinator[KindleState]):
         if self.client is None:
             await self._async_init_client()
         try:
-            return await self.client.read()
+            state = await self.client.read()
         except KindleError as err:
             raise UpdateFailed(str(err)) from err
+        self.last_telemetry_poll = utcnow()
+        return state

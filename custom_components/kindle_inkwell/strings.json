@@ -56,6 +56,12 @@
       },
       "ip_address": {
         "name": "IP address"
+      },
+      "last_telemetry_poll": {
+        "name": "Last telemetry poll"
+      },
+      "last_battery_broadcast": {
+        "name": "Last battery broadcast"
       }
     },
     "switch": {

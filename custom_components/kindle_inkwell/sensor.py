@@ -15,16 +15,19 @@ from .entity import KindleEntity
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    """Add battery, Wi-Fi and RSSI."""
-    async_add_entities(
-        (
-            KindleBattery(entry.runtime_data, "battery"),
-            KindleNetwork(entry.runtime_data, "ssid"),
-            KindleNetwork(entry.runtime_data, "bssid"),
-            KindleNetwork(entry.runtime_data, "ip_address"),
-            KindleSignal(entry.runtime_data, "signal"),
-        )
-    )
+    """Add battery, Wi-Fi and connection diagnostics."""
+    coordinator = entry.runtime_data
+    entities = [
+        KindleBattery(coordinator, "battery"),
+        KindleNetwork(coordinator, "ssid"),
+        KindleNetwork(coordinator, "bssid"),
+        KindleNetwork(coordinator, "ip_address"),
+        KindleSignal(coordinator, "signal"),
+        KindleContact(coordinator, "last_telemetry_poll"),
+    ]
+    if coordinator.ble:
+        entities.append(KindleContact(coordinator, "last_battery_broadcast"))
+    async_add_entities(entities)
 
 
 class KindleBattery(KindleEntity, SensorEntity):
@@ -108,3 +111,25 @@ class KindleSignal(KindleEntity, SensorEntity):
         """Return RSSI in dBm."""
         if state := self.coordinator.data:
             return state.rssi
+
+
+class KindleContact(KindleEntity, SensorEntity):
+    """The most recent confirmed contact through one transport."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    def __init__(self, coordinator, key):
+        """Select the contact timestamp."""
+        super().__init__(coordinator, key)
+        self.key = key
+
+    @property
+    def available(self):
+        """Keep the timestamp visible when the Kindle is unreachable."""
+        return self.native_value is not None
+
+    @property
+    def native_value(self):
+        """Return the most recent observed contact."""
+        return getattr(self.coordinator, self.key)
