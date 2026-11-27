@@ -15,7 +15,7 @@ pub struct Settings {
     pub cpu_latency_us: i32,
     pub commands: Commands,
     pub sleep_after_seconds: u32,
-    sleep_for_seconds: u32,
+    pub sleep_for_seconds: u32,
 }
 
 #[derive(Deserialize)]

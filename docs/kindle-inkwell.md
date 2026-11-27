@@ -30,6 +30,11 @@ Add **Kindle Inkwell** under **Settings → Devices & services**, or choose
 the Kindle's Bluetooth address and the absolute path to the key file inside
 Core. Use an adapter or an active Bluetooth proxy in range of the Kindle.
 
+After the first successful poll, the integration registers the Kindle's
+`wlan0` MAC address as a network connection on its Home Assistant device.
+Device-registry integrations such as NetBox can match this connection.
+The Wi-Fi access point address is reported separately by **BSSID**.
+
 The **Wi-Fi** and **SSH (Wi-Fi)** switches work over BLE even with Wi-Fi
 turned off. Wi-Fi SSH controls the Inkwell listener on port 2022. USB SSH stays
 available. Turning Wi-Fi back on reconnects to the saved network. This uses Inkwell's association control, while the shared Bluetooth radio stays available. The Wi-Fi

@@ -142,6 +142,7 @@ print(json.dumps({
     "ssid": status.get("ssid") if connected else None,
     "bssid": status.get("bssid") if connected else None,
     "ip_address": ip_address,
+    "wifi_mac": read("/sys/class/net/wlan0/address") or None,
     "rssi_dbm": int(rssi) if rssi.lstrip("-").isdigit() else None,
     "kindle_firmware": firmware[0] if firmware else None,
     "kindle_build": build[0].removeprefix("System Software Version: ") if build else None,

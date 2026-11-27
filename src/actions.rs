@@ -129,7 +129,7 @@ impl<'a> Actions<'a> {
         }
         let mut state = telemetry().await?;
         if request.telemetry_fields() == 19 {
-            state.push(diagnostics());
+            state.push(diagnostics(request.reports_wifi_mac()));
         } else {
             state.truncate(request.telemetry_fields());
         }
@@ -292,7 +292,7 @@ async fn telemetry() -> Result<Vec<Value>> {
     ])
 }
 
-fn diagnostics() -> Value {
+fn diagnostics(include_wifi_mac: bool) -> Value {
     let battery = "/sys/class/power_supply/bd71827_bat";
     let reading = |name| read(&format!("{battery}/{name}")).and_then(|s| s.parse::<i64>().ok());
     let backlight = "/sys/class/backlight/bl";
@@ -301,25 +301,31 @@ fn diagnostics() -> Value {
         read("/proc/uptime").and_then(|text| text.split_whitespace().next()?.parse::<f64>().ok());
     let wake = read("/run/opendisplay-last-wake")
         .and_then(|text| serde_json::from_str::<Value>(&text).ok());
-    json!([
-        crate::advertising::cpu_temperature().map(|temp| f64::from(temp) / 1000.0),
-        reading("temp"),
-        reading("voltage_now"),
-        reading("current_now"),
-        reading("current_avg"),
-        reading("charge_now"),
-        reading("charge_full"),
-        reading("charge_full_design"),
-        reading("battery_cycle"),
-        read(&format!("{battery}/health")),
-        light("actual_brightness"),
-        light("max_brightness"),
-        uptime,
-        uptime
-            .zip(monotonic_seconds())
-            .map(|(boot, monotonic)| (boot - monotonic).max(0.0)),
-        wake,
-    ])
+    let mut values = vec![
+        json!(crate::advertising::cpu_temperature().map(|temp| f64::from(temp) / 1000.0)),
+        json!(reading("temp")),
+        json!(reading("voltage_now")),
+        json!(reading("current_now")),
+        json!(reading("current_avg")),
+        json!(reading("charge_now")),
+        json!(reading("charge_full")),
+        json!(reading("charge_full_design")),
+        json!(reading("battery_cycle")),
+        json!(read(&format!("{battery}/health"))),
+        json!(light("actual_brightness")),
+        json!(light("max_brightness")),
+        json!(uptime),
+        json!(
+            uptime
+                .zip(monotonic_seconds())
+                .map(|(boot, monotonic)| (boot - monotonic).max(0.0))
+        ),
+        json!(wake),
+    ];
+    if include_wifi_mac {
+        values.push(json!(read("/sys/class/net/wlan0/address")));
+    }
+    Value::Array(values)
 }
 
 fn monotonic_seconds() -> Option<f64> {

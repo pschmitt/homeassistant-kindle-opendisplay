@@ -93,7 +93,7 @@ do
       ;;
     *) exit "$display_status" ;;
   esac
-  python3 sleep_cycle.py ./kindle-opendisplay kindle-pw4 device.json frame.bin --render &
+  ./kindle-opendisplay --supervise &
   child=$!
   if [ "$stop" -eq 1 ] || [ "$reload" -eq 1 ]
   then

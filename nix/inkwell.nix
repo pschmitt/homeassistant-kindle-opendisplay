@@ -71,7 +71,7 @@ pkgs.stdenvNoCC.mkDerivation {
     mkdir -p src/rootfs/opt/opendisplay
     install -m 0755 ${receiver}/bin/kindle-opendisplay src/rootfs/opt/opendisplay/
     install -m 0755 ${overlay}/start ${overlay}/frontlight src/rootfs/opt/opendisplay/
-    install -m 0644 ${overlay}/settings.py ${overlay}/provision.py ${overlay}/launch.py ${overlay}/sleep_cycle.py src/rootfs/opt/opendisplay/
+    install -m 0644 ${overlay}/settings.py ${overlay}/provision.py ${overlay}/launch.py src/rootfs/opt/opendisplay/
     touch src/rootfs/opt/opendisplay/autostart
   '';
 
@@ -97,7 +97,6 @@ pkgs.stdenvNoCC.mkDerivation {
       | debugfs -w -f /dev/stdin out/alpine.img
     e2fsck -fn out/alpine.img
     debugfs -R 'stat /opt/opendisplay/kindle-opendisplay' out/alpine.img | grep -F 'Type: regular'
-    debugfs -R 'stat /opt/opendisplay/sleep_cycle.py' out/alpine.img | grep -F 'Type: regular'
     debugfs -R 'stat /opt/opendisplay/control.key' out/alpine.img 2>&1 | grep -F 'File not found'
     debugfs -R 'stat /opt/opendisplay/device.json' out/alpine.img 2>&1 | grep -F 'File not found'
     debugfs -R 'stat /usr/bin/python3.14' out/alpine.img | grep -F 'Type: regular'

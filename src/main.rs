@@ -2,6 +2,7 @@ mod actions;
 mod advertising;
 mod control;
 mod settings;
+mod sleep;
 
 use actions::Actions;
 use anyhow::{Context, Result, bail, ensure};
@@ -130,6 +131,14 @@ async fn main() -> Result<()> {
     if args.peek().is_some_and(|arg| arg == "--version") {
         println!("kindle-opendisplay {}", env!("CARGO_PKG_VERSION"));
         return Ok(());
+    }
+    if args.peek().is_some_and(|arg| arg == "--supervisor-version") {
+        println!("1");
+        return Ok(());
+    }
+    if args.peek().is_some_and(|arg| arg == "--supervise") {
+        ensure!(args.count() == 1, "--supervise takes no arguments");
+        return sleep::supervise().await;
     }
     if args.peek().is_some_and(|arg| arg == "--idle-inhibited") {
         let settings = Settings::load(Path::new("/opt/opendisplay"))?;
@@ -280,7 +289,7 @@ async fn serve(
                     let file = fs::OpenOptions::new()
                         .create(true)
                         .append(true)
-                        .open("/run/opendisplay-session.lock")?;
+                        .open(sleep::SESSION_LOCK)?;
                     match file.try_lock_shared() {
                         Ok(()) => Some(file),
                         Err(std::fs::TryLockError::WouldBlock) => continue,

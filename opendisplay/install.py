@@ -107,16 +107,29 @@ def install(cpu_latency_us=None, receiver_binary=None):
     TARGET.mkdir(exist_ok=True)
     with TemporaryDirectory(prefix=".install-", dir=TARGET) as directory:
         stage = Path(directory)
+        binary = installed_binary
         if receiver_binary is not None:
             binary = stage / installed_binary.name
             shutil.copyfile(receiver_binary, binary)
             binary.chmod(0o755)
-            subprocess.run([binary, "--version"], check=True)
+        try:
+            probe = subprocess.run(
+                [binary, "--supervisor-version"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=True,
+            )
+        except (OSError, subprocess.SubprocessError):
+            probe = None
+        if probe is None or probe.stdout.strip() != "1":
+            raise SystemExit(
+                "Supply a matching Rust ARMv7 binary with --receiver-binary."
+            )
         files = (
             "settings.py",
             "provision.py",
             "launch.py",
-            "sleep_cycle.py",
             "frontlight",
             "start",
         )
@@ -158,7 +171,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--receiver-binary",
         type=Path,
-        help="Path to the Rust ARMv7 receiver. Required if no receiver is installed.",
+        help="Path to the Rust ARMv7 receiver. Required on fresh installs and for older binaries.",
     )
     args = parser.parse_args()
     install(args.cpu_latency_us, args.receiver_binary)

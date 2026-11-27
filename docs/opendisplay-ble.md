@@ -14,9 +14,9 @@ the installer as root from that directory.
 python3 install.py --receiver-binary /path/to/kindle-opendisplay-armv7
 ```
 
-The installer requires the Rust binary for a new install or an upgrade
-from the legacy receiver. For subsequent helper-only updates it can reuse
-an installed Rust binary. It keeps the BLE address, control key, and TOML
+Use the installer and receiver binary from the same release or checkout.
+Helper-only updates can reuse an installed binary with Rust sleep
+supervision. The installer keeps the BLE address, control key, and TOML
 settings. On first launch it creates
 `/opt/opendisplay/device.json`, `control.key`, and `config.toml`.
 Pair the resulting device using the
@@ -41,8 +41,8 @@ to `300`. The **Prevent sleep** HA switch and the default external-power
 policy defer suspend. An active BLE connection also defers it.
 
 The last e-ink frame stays visible during suspend. The receiver closes BLE
-before suspending, then wakes on the SNVS RTC, repairs DHCP if needed, and
-starts BLE again. USB and Wi-Fi SSH and BLE controls need the Kindle awake.
+before suspending. The Rust supervisor wakes on the SNVS RTC, repairs
+DHCP if needed, and starts BLE again. USB and Wi-Fi SSH and BLE controls need the Kindle awake.
 A tested cycle spent about 135 seconds suspended and received a fresh
 Home Assistant frame after wake on the same boot.
 

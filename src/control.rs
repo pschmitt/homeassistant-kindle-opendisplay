@@ -44,13 +44,17 @@ impl Authenticated {
 
     pub fn telemetry_fields(&self) -> usize {
         match self.opcode & 0xf0 {
-            0xb0 => 19,
+            0xa0 | 0xb0 => 19,
             0xf0 => 18,
             0xe0 => 17,
             0xc0 | 0xd0 => 16,
             _ if self.encrypted() => 15,
             _ => 13,
         }
+    }
+
+    pub fn reports_wifi_mac(&self) -> bool {
+        self.opcode & 0xf0 == 0xa0
     }
 
     fn header(&self) -> Vec<u8> {
@@ -118,7 +122,7 @@ impl<'a> Session<'a> {
                 "invalid request authentication"
             );
             let mask = match opcode & 0xf0 {
-                0xb0 | 0xf0 => 0x0f,
+                0xa0 | 0xb0 | 0xf0 => 0x0f,
                 0xe0 => 0x1f,
                 0xc0 | 0xd0 => 0x1f,
                 _ => 0x7f,

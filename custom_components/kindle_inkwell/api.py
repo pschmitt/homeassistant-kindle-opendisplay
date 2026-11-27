@@ -76,6 +76,7 @@ class KindleState:
     plugged_in: bool | None = None
     prevent_sleep: bool | None = None
     diagnostics: KindleDiagnostics | None = None
+    wifi_mac: str | None = None
 
 
 @dataclass(frozen=True)
@@ -159,6 +160,7 @@ class KindleClient:
                 device.get("kernel_release"),
                 device.get("alpine_version"),
                 ip_address=device.get("ip_address"),
+                wifi_mac=device.get("wifi_mac"),
                 plugged_in=charge.get("plugged_in"),
             )
         except (ValueError, KeyError, TypeError, AttributeError) as err:
@@ -181,7 +183,7 @@ _OPERATIONS = {
     "ssh": (5, 6),
     "prevent_sleep": (10, 11),
 }
-_TELEMETRY_FIELDS = {0xB0: 19, 0xF0: 18, 0xE0: 17, 0xC0: 16, 0x80: 15}
+_TELEMETRY_FIELDS = {0xA0: 19, 0xB0: 19, 0xF0: 18, 0xE0: 17, 0xC0: 16, 0x80: 15}
 
 
 class KindleBleClient:
@@ -216,7 +218,7 @@ class KindleBleClient:
         opcode = _OPERATIONS[control][enabled]
         async with self.lock:
             flags = self._telemetry_flags or 0x80
-            if control == "prevent_sleep" and flags not in (0xB0, 0xF0):
+            if control == "prevent_sleep" and flags not in (0xA0, 0xB0, 0xF0):
                 raise KindleTelemetryUnsupported("The receiver has no sleep override")
             field = {"wifi": "wifi_enabled", "ssh": "ssh_enabled"}.get(control, control)
             for attempt in range(2):
@@ -243,14 +245,14 @@ class KindleBleClient:
         if type(level) is not int or not 0 <= level <= 65535:
             raise ValueError("Invalid frontlight level")
         async with self.lock:
-            if self._telemetry_flags != 0xB0:
+            if self._telemetry_flags not in (0xA0, 0xB0):
                 raise KindleTelemetryUnsupported(
                     "The receiver has no brightness control"
                 )
             try:
                 await self._exchange(12, flags=0xB0, level=level)
             except KindleLinkError:
-                state = await self._exchange(0, flags=0xB0)
+                state = await self._exchange(0, flags=self._telemetry_flags)
                 if state.diagnostics.frontlight_level != level:
                     raise KindleError("Kindle telemetry did not confirm the brightness")
 
@@ -379,17 +381,22 @@ class KindleBleClient:
                 value is not None and type(value) is not bool for value in fields[16:18]
             ):
                 raise ValueError
-            if flags == 0xB0:
+            wifi_mac = None
+            if flags in (0xA0, 0xB0):
                 readings = fields[-1]
-                if not isinstance(readings, list) or len(readings) != 15:
+                if not isinstance(readings, list) or len(readings) != (
+                    16 if flags == 0xA0 else 15
+                ):
                     raise ValueError
+                if flags == 0xA0:
+                    wifi_mac = readings.pop()
                 if readings[-1] is not None:
                     timestamp, duration = readings[-1]
                     if type(timestamp) is not int or type(duration) not in (float, int):
                         raise ValueError
                     readings[-1] = (timestamp, duration)
                 fields[-1] = KindleDiagnostics(*readings)
-            return KindleState(*fields)
+            return KindleState(*fields, wifi_mac=wifi_mac)
         except (ValueError, TypeError, KeyError, AttributeError) as err:
             raise KindleError(
                 "Kindle reported a failed command or invalid telemetry"

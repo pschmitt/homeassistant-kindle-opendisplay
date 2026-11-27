@@ -1,6 +1,7 @@
 """Poll Kindle telemetry in one update shared by all entities."""
 
 import logging
+import re
 from datetime import timedelta
 from pathlib import Path
 
@@ -72,6 +73,7 @@ class KindleCoordinator(DataUpdateCoordinator[KindleState]):
         )
         self.ble = CONF_BLUETOOTH_KEY_FILE in entry.data
         self.client = None
+        self._wifi_connection_conflict = None
         self.battery_announcement = None
         self.last_battery_broadcast = None
         self.last_telemetry_poll = None
@@ -151,4 +153,30 @@ class KindleCoordinator(DataUpdateCoordinator[KindleState]):
         except KindleError as err:
             raise UpdateFailed(str(err)) from err
         self.last_telemetry_poll = utcnow()
+        self._async_register_wifi_mac(state.wifi_mac)
         return state
+
+    @callback
+    def _async_register_wifi_mac(self, address):
+        """Publish the Wi-Fi NIC address for device-registry integrations."""
+        if not isinstance(address, str) or not re.fullmatch(
+            r"(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}", address
+        ):
+            return
+        address = dr.format_mac(address)
+        if address == "00:00:00:00:00:00" or int(address[:2], 16) & 1:
+            return
+        connection = (dr.CONNECTION_NETWORK_MAC, address)
+        registry = dr.async_get(self.hass)
+        device = registry.async_get_device(identifiers=self.device_info["identifiers"])
+        if device is None or connection in device.connections:
+            return
+        existing = registry.async_get_device(connections={connection})
+        if existing is not None and existing.id != device.id:
+            if self._wifi_connection_conflict != existing.id:
+                self.logger.warning(
+                    "Kindle Wi-Fi MAC is registered to another HA device"
+                )
+                self._wifi_connection_conflict = existing.id
+            return
+        registry.async_update_device(device.id, merge_connections={connection})
