@@ -89,11 +89,11 @@ ID normally includes the Kindle's device name.
 | Switch | **SSH (Wi-Fi)** | Toggle Inkwell's Wi-Fi SSH listener on port 2022 over BLE. |
 | Switch | **Prevent sleep** | Keep the receiver awake over BLE. The override persists across receiver restarts. |
 | Number | **Frontlight brightness** | Slider from 0% (off) to 100% of the driver maximum. |
-| Event | **Power event** | New `wake` event after HA observes a recorded timed-suspend resume. Attributes give the device's wake time and suspended seconds. |
+| Event | **Event** | New `wake` event after HA observes a recorded timed-suspend resume. Attributes give the device's wake time and suspended seconds. |
 | Button | **Reboot into Inkwell** | Restart into Inkwell over BLE. |
 | Button | **Reboot into Kindle OS** | Boot Amazon's OS once over BLE. Its next normal reboot returns to Inkwell if the boot hook is enabled. |
 
-The extended battery and CPU readings, uptime, sleep history, Power event,
+The extended battery and CPU readings, uptime, sleep history, the wake event,
 and brightness slider require the updated Rust receiver and BLE. The
 v0.7.0 receiver supports the earlier readings and controls. Build the
 ARMv7 receiver from the current checkout if your release predates these

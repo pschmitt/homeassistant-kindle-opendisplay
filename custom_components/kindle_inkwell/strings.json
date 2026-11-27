@@ -127,7 +127,7 @@
     },
     "event": {
       "wake": {
-        "name": "Power event",
+        "name": "Event",
         "state": {
           "wake": "Woke from timed suspend"
         }
