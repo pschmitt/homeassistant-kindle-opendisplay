@@ -168,10 +168,18 @@ class KindleCoordinator(DataUpdateCoordinator[KindleState]):
             return
         connection = (dr.CONNECTION_NETWORK_MAC, address)
         registry = dr.async_get(self.hass)
-        device = registry.async_get_device(identifiers=self.device_info["identifiers"])
+        identifiers = self.device_info["identifiers"]
+        if hasattr(registry, "async_get_device_by_identifier"):
+            entry_id = self.config_entry.entry_id
+            device = registry.async_get_device_by_identifier(
+                next(iter(identifiers)), entry_id
+            )
+            existing = registry.async_get_device_by_connection(connection, entry_id)
+        else:
+            device = registry.async_get_device(identifiers=identifiers)
+            existing = registry.async_get_device(connections={connection})
         if device is None or connection in device.connections:
             return
-        existing = registry.async_get_device(connections={connection})
         if existing is not None and existing.id != device.id:
             if self._wifi_connection_conflict != existing.id:
                 self.logger.warning(
