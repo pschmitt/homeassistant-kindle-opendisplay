@@ -178,6 +178,7 @@ def install(cpu_latency_us=None, receiver_binary=None):
             "settings.py",
             "provision.py",
             "launch.py",
+            "sleep_cycle.py",
             "frontlight",
             "start",
         ):

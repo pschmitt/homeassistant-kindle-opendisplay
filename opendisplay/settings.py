@@ -22,6 +22,8 @@ class Settings:
     command_user: str = "nobody"
     autostart: bool = True
     controls: bool = True
+    sleep_after_seconds: int = 0
+    sleep_for_seconds: int = 300
 
 
 DEFAULT_SETTINGS = Settings()
@@ -50,8 +52,18 @@ def load_settings(directory):
         "stay_awake_on_external_power",
         "cpu_latency_us",
         "commands",
+        "sleep_after_seconds",
+        "sleep_for_seconds",
     }:
         raise ValueError("Unknown OpenDisplay settings")
+    sleep_after = config.get("sleep_after_seconds", 0)
+    sleep_for = config.get("sleep_for_seconds", 300)
+    if type(sleep_after) is not int or not (
+        sleep_after == 0 or 30 <= sleep_after <= 86400
+    ):
+        raise ValueError("sleep_after_seconds must be 0 or between 30 and 86400")
+    if type(sleep_for) is not int or not 15 <= sleep_for <= 86400:
+        raise ValueError("sleep_for_seconds must be between 15 and 86400")
     commands = config.get("commands", {})
     if not isinstance(commands, dict) or commands.keys() - {"enabled", "user"}:
         raise ValueError("Expected a commands table with enabled and user settings")
@@ -88,6 +100,8 @@ def load_settings(directory):
         command_user=user,
         autostart=autostart,
         controls=controls,
+        sleep_after_seconds=sleep_after,
+        sleep_for_seconds=sleep_for,
     )
 
 
@@ -98,6 +112,11 @@ def install_settings(directory, latency=None):
     if path.exists() and latency is None:
         return
     idle_limit = current.cpu_latency_us if latency is None else latency
+    sleep_prefix = (
+        "# "
+        if (current.sleep_after_seconds, current.sleep_for_seconds) == (0, 300)
+        else ""
+    )
     text = (
         "# Reload the receiver after editing this file.\n"
         f"autostart = {str(current.autostart).lower()}\n"
@@ -105,7 +124,9 @@ def install_settings(directory, latency=None):
         f"opendisplay = {str(current.opendisplay).lower()}\n"
         f"battery_advertising = {str(current.battery_advertising).lower()}\n"
         f"stay_awake_on_external_power = {str(current.stay_awake_on_external_power).lower()}\n"
-        f"cpu_latency_us = {idle_limit}\n\n"
+        f"cpu_latency_us = {idle_limit}\n"
+        f"{sleep_prefix}sleep_after_seconds = {current.sleep_after_seconds}\n"
+        f"{sleep_prefix}sleep_for_seconds = {current.sleep_for_seconds}\n\n"
         "[commands]\n"
         f"enabled = {str(current.commands_enabled).lower()}\n"
         f"user = {json.dumps(current.command_user)}\n"

@@ -45,6 +45,8 @@ opendisplay = true
 battery_advertising = true
 stay_awake_on_external_power = true
 cpu_latency_us = 0
+sleep_after_seconds = 0
+sleep_for_seconds = 300
 
 [commands]
 enabled = false
@@ -61,8 +63,14 @@ user = "nobody"
 - `battery_advertising` enables passive BTHome battery and charging data.
 - When Inkwell Home owns the panel, `stay_awake_on_external_power` skips its
   idle sleep screen and suspend on USB or a wall charger. Home still handles
-  manual sleep and battery-powered idle. OpenDisplay mode keeps the BLE
-  receiver awake for incoming frames.
+  manual sleep and battery-powered idle. OpenDisplay's optional timed
+  sleep uses the same external-power setting.
+- `sleep_after_seconds` sets how long OpenDisplay waits without a completed
+  frame before timed suspend. The default `0` keeps it continuously awake.
+  For battery operation, try `300` for five minutes awake. An active BLE
+  session, the **Prevent sleep** switch, or external power with the default
+  power policy can defer suspend.
+- `sleep_for_seconds` sets the RTC wake interval. The default is `300`.
 - `cpu_latency_us` accepts `0` or `50`. See the suspend notes below.
 - `commands` enables the BLE command action and selects a local non-root
   Unix account. The account's primary group must also be non-root.
@@ -134,18 +142,22 @@ battery-backed RTC alarm woke Linux after about 36 seconds and BLE
 advertising resumed. USB SSH recovered. Wi-Fi reassociated, but restoring
 its IPv4 lease required restarting the Wi-Fi DHCP client over USB. This test
 did not exercise deeper suspend modes. Keep the receiver awake if the
-display must accept on-demand updates. A scheduled sleep mode would need
-an on-device RTC alarm, an HA upload during the awake window, and verified
-network recovery after wake. The e-ink panel can hold the last frame
-between updates.
+display must accept on-demand updates. The e-ink panel can hold the last
+frame between awake windows.
 
 A later Paperwhite 4 test entered `mem` with a 45-second alarm on the
 wake-enabled SNVS RTC (`rtc1`). It resumed on the same boot after 44.47
 seconds of kernel-accounted suspend. USB SSH came back. The Wi-Fi driver
 reassociated but needed a fresh DHCP client to regain IPv4. The Bluetooth
 receiver exited with HCI `Command Disallowed` and advertising resumed
-after restarting the receiver. Scheduled suspend therefore needs explicit
-recovery of DHCP and BLE before it can serve an unattended display.
+after restarting the receiver.
+
+Timed sleep now uses that RTC to wake the Kindle, shuts down BLE before
+suspending, repairs DHCP if Wi-Fi has lost its IPv4 address, and launches a
+fresh receiver on wake. A hardware trial measured 134 seconds suspended
+and verified the Wi-Fi lease and BLE advertising recovered on the same
+boot. Home Assistant can refresh the panel during each awake window. BLE and remote controls are unavailable during suspend. A
+broadcast or telemetry gap alone cannot establish the device's power state.
 
 ## BTHome advertisements
 

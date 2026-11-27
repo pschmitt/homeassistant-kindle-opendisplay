@@ -15,7 +15,7 @@ use settings::Settings;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::signal::unix::{SignalKind, signal};
 use tokio_serial::{FlowControl, SerialStream};
@@ -276,9 +276,25 @@ async fn serve(
                     .map_err(|e| anyhow::anyhow!("accept BLE connection: {e:?}"))?
                     .with_attribute_server(&gatt_server.server)
                     .map_err(|e| anyhow::anyhow!("attach GATT server: {e:?}"))?;
+                let session_lock = if config.on_device && config.settings.sleep_after_seconds != 0 {
+                    let file = fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open("/run/opendisplay-session.lock")?;
+                    match file.try_lock_shared() {
+                        Ok(()) => Some(file),
+                        Err(std::fs::TryLockError::WouldBlock) => continue,
+                        Err(error) => return Err(error).context("lock OpenDisplay session"),
+                    }
+                } else {
+                    None
+                };
                 if let Err(error) = receive(&gatt_server, &connection, &config, &mut actions).await
                 {
                     eprintln!("OpenDisplay connection ended: {error:#}");
+                }
+                if let Some(lock) = session_lock {
+                    lock.set_modified(SystemTime::now())?;
                 }
             }
         }

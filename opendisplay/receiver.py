@@ -322,9 +322,29 @@ async def serve(
 
         @device.on(Device.EVENT_CONNECTION)
         def connected(connection):
+            session = None
+            if transport == KINDLE_TRANSPORT and settings.sleep_after_seconds:
+                session = os.open(
+                    "/run/opendisplay-session.lock", os.O_CREAT | os.O_WRONLY, 0o600
+                )
+                try:
+                    fcntl.flock(session, fcntl.LOCK_SH | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    os.close(session)
+                    asyncio.create_task(connection.disconnect())
+                    return
+                except OSError:
+                    os.close(session)
+                    raise
+
             @connection.on(connection.EVENT_DISCONNECTION)
             def disconnected(_reason):
                 receiver.disconnect(connection)
+                if session is not None:
+                    try:
+                        os.utime(session)
+                    finally:
+                        os.close(session)
 
         properties = Characteristic.Properties
         characteristic = Characteristic(

@@ -14,6 +14,8 @@ pub struct Settings {
     pub stay_awake_on_external_power: bool,
     pub cpu_latency_us: i32,
     pub commands: Commands,
+    pub sleep_after_seconds: u32,
+    sleep_for_seconds: u32,
 }
 
 #[derive(Deserialize)]
@@ -42,6 +44,8 @@ impl Default for Settings {
             stay_awake_on_external_power: true,
             cpu_latency_us: 0,
             commands: Commands::default(),
+            sleep_after_seconds: 0,
+            sleep_for_seconds: 300,
         }
     }
 }
@@ -70,6 +74,15 @@ impl Settings {
         ensure!(
             matches!(settings.cpu_latency_us, 0 | 50),
             "cpu_latency_us must be 0 or 50"
+        );
+        ensure!(
+            settings.sleep_after_seconds == 0
+                || (30..=86400).contains(&settings.sleep_after_seconds),
+            "sleep_after_seconds must be 0 or between 30 and 86400"
+        );
+        ensure!(
+            (15..=86400).contains(&settings.sleep_for_seconds),
+            "sleep_for_seconds must be between 15 and 86400"
         );
         ensure!(!settings.commands.user.is_empty(), "commands.user is empty");
         if settings.commands.enabled {

@@ -90,10 +90,11 @@ do
   esac
   if [ -x ./kindle-opendisplay ]
   then
-    ./kindle-opendisplay kindle-pw4 device.json frame.bin --render &
+    set -- ./kindle-opendisplay
   else
-    python3 receiver.py kindle-pw4 device.json frame.bin --render &
+    set -- python3 receiver.py
   fi
+  python3 sleep_cycle.py "$@" kindle-pw4 device.json frame.bin --render &
   child=$!
   if [ "$stop" -eq 1 ] || [ "$reload" -eq 1 ]
   then
