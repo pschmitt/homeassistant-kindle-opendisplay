@@ -13,6 +13,9 @@
 
 ## Install
 
+Find the prebuilt Inkwell ZIP and ARMv7 receiver on
+[GitHub Releases](https://github.com/pschmitt/homeassistant-kindle-opendisplay/releases).
+
 Install the Paperwhite 4 port of [Inkwell](https://github.com/akaped/Inkwell).
 Copy the repository's `opendisplay/` directory to the Kindle. Run the
 [post-installer](opendisplay/install.py) as root from that directory:

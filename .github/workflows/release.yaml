@@ -1,0 +1,75 @@
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]*"]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    uses: pschmitt/ci-workflows/.github/workflows/rust-lint.yaml@main
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pschmitt/ci-workflows/.github/actions/nix-setup@main
+      - uses: astral-sh/setup-uv@v10.4.0
+      - name: Verify release version
+        run: |
+          version=$(jq -r .version custom_components/kindle_inkwell/manifest.json)
+          test "$GITHUB_REF_NAME" = "v$version"
+      - name: Build the receiver and Inkwell image
+        run: |
+          nix build '.#checks.x86_64-linux.protocol' --no-link
+          nix build '.#kindle-armv7' --out-link result-armv7
+          nix build '.#inkwell-pw4' --out-link result-image
+          (cd result-image && sha256sum -c SHA256SUMS)
+      - name: Run virtual BLE tests on ARMv7
+        run: |
+          nix shell --inputs-from . 'nixpkgs#qemu-user' 'nixpkgs#python314' -c \
+            uv run --no-python-downloads tests/virtual_hci.py qemu-arm -cpu cortex-a9 result-armv7/bin/kindle-opendisplay
+      - name: Prepare release files
+        run: |
+          mkdir release
+          cp result-image/Inkwell-Paperwhite4-OpenDisplay.zip release/
+          install -m 0755 result-armv7/bin/kindle-opendisplay release/kindle-opendisplay-armv7
+          (cd release && sha256sum Inkwell-Paperwhite4-OpenDisplay.zip kindle-opendisplay-armv7 > SHA256SUMS)
+      - uses: actions/upload-artifact@v7
+        with:
+          name: kindle-release
+          path: release/
+          if-no-files-found: error
+          compression-level: 0
+
+  publish:
+    needs: [lint, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: kindle-release
+          path: release
+      - run: sha256sum -c SHA256SUMS
+        working-directory: release
+      - uses: softprops/action-gh-release@v3
+        with:
+          fail_on_unmatched_files: true
+          files: |
+            release/Inkwell-Paperwhite4-OpenDisplay.zip
+            release/kindle-opendisplay-armv7
+            release/SHA256SUMS
+          body: |
+            Kindle OpenDisplay for the jailbroken Kindle Paperwhite 4 (10th generation).
+
+            - Download the Inkwell ZIP for a fresh Inkwell installation.
+            - For an existing Inkwell installation, use the ARMv7 binary with the post-installer.
+            - Use SHA256SUMS to verify both downloads.
+
+            [Kindle installation](https://github.com/pschmitt/homeassistant-kindle-opendisplay/blob/${{ github.ref_name }}/docs/inkwell-image.md) · [Home Assistant integration](https://github.com/pschmitt/homeassistant-kindle-opendisplay/blob/${{ github.ref_name }}/docs/kindle-inkwell.md)
