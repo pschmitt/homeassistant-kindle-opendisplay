@@ -11,8 +11,7 @@ integration handles image uploads and chip temperature on the same radio.
 [![Open this integration in Home Assistant Marketplace](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=pschmitt&repository=homeassistant-kindle-opendisplay&category=integration)
 
 The button opens the custom repository in Marketplace on Home Assistant
-2026.11 or later. While the GitHub repository is private, use a checkout
-with access and install manually if Marketplace cannot fetch it.
+2026.11 or later. You can also install the integration manually.
 
 Copy `custom_components/kindle_inkwell` to the corresponding directory in
 Home Assistant's configuration. For a submodule deployment, link the domain
