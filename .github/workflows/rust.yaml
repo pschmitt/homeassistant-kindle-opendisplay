@@ -19,7 +19,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --locked
-      - uses: astral-sh/setup-uv@v10.3.3
+      - uses: astral-sh/setup-uv@v10.4.0
       - run: cargo build --locked
       - run: uv run tests/virtual_hci.py target/debug/kindle-opendisplay
 
@@ -31,7 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: pschmitt/ci-workflows/.github/actions/nix-setup@main
-      - uses: astral-sh/setup-uv@v10.3.3
+      - uses: astral-sh/setup-uv@v10.4.0
       - run: nix build '.#kindle-armv7'
       - run: |
           nix shell --inputs-from . 'nixpkgs#qemu-user' 'nixpkgs#python314' -c \
