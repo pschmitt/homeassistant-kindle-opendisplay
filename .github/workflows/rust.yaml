@@ -33,11 +33,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: pschmitt/ci-workflows/.github/actions/nix-setup@main
-      - uses: astral-sh/setup-uv@v10.4.0
       - run: nix build '.#kindle-armv7'
-      - run: |
-          nix shell --inputs-from . 'nixpkgs#qemu-user' 'nixpkgs#python314' -c \
-            uv run --no-python-downloads tests/virtual_hci.py qemu-arm -cpu cortex-a9 result/bin/kindle-opendisplay
+      - run: nix build '.#checks.x86_64-linux.virtual-hci-armv7' --no-link
       - uses: actions/upload-artifact@v7
         with:
           name: kindle-opendisplay-armv7

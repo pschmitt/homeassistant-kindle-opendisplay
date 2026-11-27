@@ -74,12 +74,34 @@
       checks = eachSystem (
         system:
         let
-          craneLib = crane.mkLib nixpkgs.legacyPackages.${system};
+          pkgs = nixpkgs.legacyPackages.${system};
+          craneLib = crane.mkLib pkgs;
           src = craneLib.cleanCargoSource ./.;
           cargoArtifacts = craneLib.buildDepsOnly { inherit src; };
+          python = pkgs.python3.withPackages (ps: [
+            ps.bumble
+            ps.cryptography
+          ]);
         in
         {
           protocol = craneLib.cargoTest { inherit src cargoArtifacts; };
+
+          # Virtual BLE test of the ARMv7 receiver under qemu-user. The build
+          # user is not root, so the test expects remote commands disabled.
+          virtual-hci-armv7 =
+            pkgs.runCommand "kindle-opendisplay-virtual-hci-armv7"
+              {
+                nativeBuildInputs = [
+                  pkgs.qemu-user
+                  python
+                ];
+              }
+              ''
+                python3 ${./tests/virtual_hci.py} \
+                  qemu-arm -cpu cortex-a9 \
+                  ${packages.${system}.kindle-armv7}/bin/kindle-opendisplay
+                touch "$out"
+              '';
         }
       );
 

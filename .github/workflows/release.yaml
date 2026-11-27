@@ -18,7 +18,6 @@ jobs:
         with:
           persist-credentials: false
       - uses: pschmitt/ci-workflows/.github/actions/nix-setup@main
-      - uses: astral-sh/setup-uv@v10.4.0
       - name: Verify release version
         run: |
           version=$(jq -r .version custom_components/kindle_inkwell/manifest.json)
@@ -30,9 +29,7 @@ jobs:
           nix build '.#inkwell-pw4' --out-link result-image
           (cd result-image && sha256sum -c SHA256SUMS)
       - name: Run virtual BLE tests on ARMv7
-        run: |
-          nix shell --inputs-from . 'nixpkgs#qemu-user' 'nixpkgs#python314' -c \
-            uv run --no-python-downloads tests/virtual_hci.py qemu-arm -cpu cortex-a9 result-armv7/bin/kindle-opendisplay
+        run: nix build '.#checks.x86_64-linux.virtual-hci-armv7' --no-link
       - name: Prepare release files
         run: |
           mkdir release

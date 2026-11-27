@@ -12,7 +12,14 @@ test after building the Rust binary.
 uv run tests/virtual_hci.py target/debug/kindle-opendisplay
 ```
 
-The ARMv7 workflow runs the same test under QEMU. On the physical
+The Nix check `virtual-hci-armv7` runs the same test against the ARMv7
+build under QEMU:
+
+```sh
+nix build '.#checks.x86_64-linux.virtual-hci-armv7'
+```
+
+On the physical
 [Paperwhite 4](tested-device.md), the receiver rendered a Home Assistant
 upload and matched every framebuffer pixel.
 
