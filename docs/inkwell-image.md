@@ -22,8 +22,9 @@ filesystem. Add your own Wi-Fi and SSH configuration using the upstream
 instructions. Device keys, addresses, and user configuration belong on the
 Kindle.
 
-OpenDisplay starts before Inkwell Home and gives the panel back if the
-receiver stops. See the [device settings](opendisplay-ble.md#device-settings)
+OpenDisplay starts before Inkwell Home. Its launcher retains the panel and
+restarts an exited receiver. Stopping the launcher hands the panel back
+to Inkwell Home. See the [device settings](opendisplay-ble.md#device-settings)
 for autostart, power policy, and timed sleep.
 
 For an existing installation, build just the receiver with

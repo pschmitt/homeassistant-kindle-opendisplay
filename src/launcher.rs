@@ -1,4 +1,4 @@
-//! Own the panel until the receiver exits or the launcher is stopped.
+//! Own the panel and supervise the boot receiver.
 
 use crate::{frontlight, settings::Settings, setup, update};
 use anyhow::{Context, Result, bail, ensure};
@@ -8,10 +8,13 @@ use std::{
 use tokio::{
     process::Command,
     signal::unix::{SignalKind, signal},
-    time::{Instant, interval},
+    time::{Instant, interval, sleep},
 };
 
 const LOCK: &str = "/run/opendisplay-mode.lock";
+const INITIAL_RETRY: Duration = Duration::from_secs(2);
+const MAX_RETRY: Duration = Duration::from_secs(30);
+const STABLE_RUN: Duration = Duration::from_secs(60);
 
 #[derive(Default)]
 struct Display {
@@ -99,6 +102,7 @@ pub async fn launch(args: impl IntoIterator<Item = OsString>) -> Result<i32> {
     let receiver = directory.join("kindle-opendisplay");
     let mut checks = interval(Duration::from_secs(2));
     let mut trial = None;
+    let mut retry_delay = INITIAL_RETRY;
     loop {
         let enabled = Settings::load(directory)?.opendisplay;
         if enabled && !exclusive {
@@ -122,11 +126,13 @@ pub async fn launch(args: impl IntoIterator<Item = OsString>) -> Result<i32> {
             }
             result => result.context("start OpenDisplay supervisor")?,
         };
+        let started = Instant::now();
         enum Next {
             Stop,
             Reload,
             Activate,
             Rollback,
+            Retry,
         }
         let next = loop {
             tokio::select! {
@@ -140,6 +146,10 @@ pub async fn launch(args: impl IntoIterator<Item = OsString>) -> Result<i32> {
                         break Next::Reload;
                     }
                     let status = status?;
+                    if exclusive {
+                        eprintln!("OpenDisplay supervisor exited: {status}");
+                        break Next::Retry;
+                    }
                     return Ok(status.code().unwrap_or_else(|| 128 + status.signal().unwrap_or(0)));
                 }
                 _ = checks.tick() => {
@@ -168,6 +178,19 @@ pub async fn launch(args: impl IntoIterator<Item = OsString>) -> Result<i32> {
                 return Ok(0);
             }
             Next::Reload => {}
+            Next::Retry => {
+                if started.elapsed() >= STABLE_RUN {
+                    retry_delay = INITIAL_RETRY;
+                }
+                eprintln!("Restarting OpenDisplay in {}s", retry_delay.as_secs());
+                tokio::select! {
+                    biased;
+                    _ = terminate.recv() => return Ok(0),
+                    _ = interrupt.recv() => return Ok(0),
+                    _ = reload.recv() => retry_delay = INITIAL_RETRY,
+                    _ = sleep(retry_delay) => retry_delay = (retry_delay * 2).min(MAX_RETRY),
+                }
+            }
             Next::Activate => {
                 if let Err(error) = update::activate(directory) {
                     eprintln!("OpenDisplay update activation: {error:#}");

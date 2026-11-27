@@ -12,6 +12,8 @@
 - **Timed sleep** can save power on battery and bring Wi-Fi and BLE back
   on wake. The bundled Inkwell image skips its own idle sleep when
   OpenDisplay is set to start at boot.
+- **Receiver recovery** restarts an exited boot receiver while keeping the
+  last frame visible.
 
 ## Install
 

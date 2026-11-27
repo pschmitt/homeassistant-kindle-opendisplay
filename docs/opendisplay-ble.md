@@ -66,6 +66,13 @@ DHCP if needed, and starts BLE again. USB and Wi-Fi SSH and BLE controls need th
 A tested cycle spent about 135 seconds suspended and received a fresh
 Home Assistant frame after wake on the same boot.
 
+### Receiver recovery
+
+In boot-exclusive mode, the launcher keeps the last frame on the panel
+when the receiver exits and retries after two seconds. Repeated short
+runs increase the delay up to 30 seconds. Each new receiver initializes
+Bluetooth again. Stop the launcher to return to Inkwell Home.
+
 ## Hardware notes
 
 The receiver drives the Broadcom controller over H4 on `/dev/ttymxc2`
