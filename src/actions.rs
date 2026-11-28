@@ -30,6 +30,7 @@ use tokio::{
 const ROOT: &str = "/mnt/us/linux";
 const SSH_WIFI: &str = "/usr/local/bin/ssh-wifi";
 const WPA: &str = "/sbin/wpa_cli";
+pub(crate) const WIFI_OFF: &str = "/mnt/us/linux/wifi.off";
 const MAX_STREAM: usize = 128;
 
 pub struct Actions<'a> {
@@ -157,13 +158,10 @@ impl<'a> Actions<'a> {
                 frontlight::toggle(opcode == 2)?;
             }
             3 | 4 => {
+                let _lock = update::lock_download()?;
                 let enabled = opcode == 4;
-                let action = if enabled { "reassociate" } else { "disconnect" };
-                ensure!(
-                    command(WPA, &["-i", "wlan0", action], "", 8).await? == "OK",
-                    "Wi-Fi command rejected"
-                );
-                set_marker("wifi.off", !enabled)?;
+                set_wifi_connection(enabled).await?;
+                set_file(Path::new(WIFI_OFF), !enabled)?;
             }
             5 | 6 => {
                 let enabled = opcode == 6;
@@ -240,6 +238,20 @@ async fn reboot(stock: bool) -> Result<()> {
     result.map(|_| ())
 }
 
+pub(crate) async fn set_wifi_connection(enabled: bool) -> Result<()> {
+    let action = if enabled { "reassociate" } else { "disconnect" };
+    ensure!(
+        command(WPA, &["-i", "wlan0", action], "", 8).await? == "OK",
+        "Wi-Fi command rejected"
+    );
+    Ok(())
+}
+
+pub(crate) async fn wifi_associated() -> Result<bool> {
+    let status = command(WPA, &["-i", "wlan0", "status"], "", 2).await?;
+    Ok(status.lines().any(|line| line == "wpa_state=COMPLETED"))
+}
+
 async fn command(path: &str, args: &[&str], action: &str, seconds: u64) -> Result<String> {
     let output = tokio::time::timeout(
         Duration::from_secs(seconds),
@@ -275,7 +287,7 @@ async fn telemetry() -> Result<Vec<Value>> {
     let light = read("/sys/class/backlight/bl/brightness")
         .context("read frontlight")?
         .parse::<u32>()?;
-    let wifi = !Path::new(ROOT).join("wifi.off").exists();
+    let wifi = !Path::new(WIFI_OFF).exists();
     let info = device_info(wifi).await;
     let ssh = command(SSH_WIFI, &["status"], "", 8).await? == "on";
     Ok(vec![

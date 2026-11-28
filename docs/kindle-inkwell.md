@@ -123,10 +123,15 @@ The Kindle Inkwell device info shows both Kindle OS and the OpenDisplay
 receiver version. The matching native OpenDisplay device shows the
 receiver version with the Kindle's manufacturer and hardware model.
 
-Connect the Kindle to power and Wi-Fi before pressing **Install**. The
-Kindle downloads the ARMv7 binary over HTTPS and verifies the release
-checksum. BLE and display uploads briefly pause while the receiver
-restarts. Home Assistant confirms the new version after reconnecting.
+Connect the Kindle to external power before pressing **Install**. The
+running receiver downloads the ARMv7 binary over HTTPS and verifies the
+release checksum. Starting with v0.9.7, the running receiver temporarily
+connects to a saved Wi-Fi network if Wi-Fi is off. It disconnects again
+after the download, including on failure. To update from v0.9.6 or older,
+turn Wi-Fi on before installing and restore your preferred setting afterward.
+
+BLE and display uploads briefly pause while the receiver restarts. Home
+Assistant confirms the new version after reconnecting.
 If confirmation fails within three minutes, the Kindle restores the
 previous binary. The update preserves the device identity, key, and TOML
 settings. Kindle OS, Inkwell, and the Home Assistant integration have

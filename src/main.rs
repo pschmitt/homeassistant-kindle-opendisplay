@@ -267,6 +267,9 @@ async fn main() -> Result<()> {
         return serve(stream, config).await;
     }
     ensure!(on_device, "invalid transport");
+    if let Err(error) = update::recover_wifi().await {
+        eprintln!("Recover Wi-Fi after interrupted OpenDisplay update: {error:#}");
+    }
     let _radio = paperwhite::Radio::acquire(settings.cpu_latency_us)
         .context("prepare Paperwhite Bluetooth controller")?;
     let serial = SerialStream::open(

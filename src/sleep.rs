@@ -1,6 +1,6 @@
 //! Supervise the Paperwhite receiver across timed suspend cycles.
 
-use crate::{advertising, settings::Settings};
+use crate::{actions::WIFI_OFF, advertising, settings::Settings};
 use anyhow::{Context, Result, ensure};
 use std::{
     fs::{self, File, OpenOptions, TryLockError},
@@ -255,12 +255,16 @@ fn uptime() -> Result<f64> {
 }
 
 async fn restore_wifi() -> Result<()> {
-    if Path::new("/mnt/us/linux/wifi.off").exists() || !Path::new("/sys/class/net/wlan0").exists() {
+    if Path::new(WIFI_OFF).exists() || !Path::new("/sys/class/net/wlan0").exists() {
         return Ok(());
     }
     if has_ipv4().await? {
         return Ok(());
     }
+    renew_wifi_dhcp().await
+}
+
+pub(crate) async fn renew_wifi_dhcp() -> Result<()> {
     match fs::read_to_string(WIFI_PID) {
         Ok(pid) => {
             let pid: i32 = pid.trim().parse().context("read Wi-Fi DHCP PID")?;
@@ -300,7 +304,7 @@ async fn restore_wifi() -> Result<()> {
     Ok(())
 }
 
-async fn has_ipv4() -> Result<bool> {
+pub(crate) async fn has_ipv4() -> Result<bool> {
     let output = timeout(
         Duration::from_secs(5),
         Command::new("ip")

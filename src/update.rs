@@ -10,7 +10,12 @@ use std::{
 };
 use tokio::process::Command;
 
-use crate::{advertising, setup::DIRECTORY};
+use crate::{
+    actions::{WIFI_OFF, set_wifi_connection, wifi_associated},
+    advertising,
+    setup::DIRECTORY,
+    sleep::{has_ipv4, renew_wifi_dhcp},
+};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const MAX_SIZE: u64 = 16 * 1024 * 1024;
@@ -18,6 +23,7 @@ const REPOSITORY: &str = "https://github.com/pschmitt/homeassistant-kindle-opend
 const STAGED: &str = ".receiver-next";
 const PREVIOUS: &str = ".receiver-previous";
 const DOWNLOAD_LOCK: &str = "/run/opendisplay-update.lock";
+const TEMPORARY_WIFI: &str = "/run/opendisplay-update-wifi";
 const BINARY: &str = "kindle-opendisplay";
 pub const TRIAL_TIMEOUT: Duration = Duration::from_secs(180);
 
@@ -113,6 +119,57 @@ fn download_lock() -> Result<File> {
         .open(DOWNLOAD_LOCK)?)
 }
 
+pub(crate) fn lock_download() -> Result<File> {
+    let lock = download_lock()?;
+    lock.try_lock().context("another download is running")?;
+    Ok(lock)
+}
+
+pub(crate) async fn recover_wifi() -> Result<()> {
+    if !Path::new(TEMPORARY_WIFI).try_exists()? {
+        return Ok(());
+    }
+    let _lock = lock_download()?;
+    restore_wifi().await
+}
+
+// The persisted user preference stays untouched while the update borrows Wi-Fi.
+async fn restore_wifi() -> Result<()> {
+    if Path::new(WIFI_OFF).try_exists()? {
+        set_wifi_connection(false)
+            .await
+            .context("restore Wi-Fi off")?;
+    }
+    fs::remove_file(TEMPORARY_WIFI)?;
+    Ok(())
+}
+
+async fn connect_wifi() -> Result<()> {
+    set_wifi_connection(true)
+        .await
+        .context("temporarily enable Wi-Fi")?;
+    tokio::time::timeout(Duration::from_secs(20), async {
+        while !wifi_associated().await? {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+        Ok::<_, anyhow::Error>(())
+    })
+    .await
+    .context("Wi-Fi did not associate")??;
+    if !has_ipv4().await? {
+        renew_wifi_dhcp().await?;
+        tokio::time::timeout(Duration::from_secs(15), async {
+            while !has_ipv4().await? {
+                tokio::time::sleep(Duration::from_millis(500)).await;
+            }
+            Ok::<_, anyhow::Error>(())
+        })
+        .await
+        .context("Wi-Fi did not obtain an IPv4 address")??;
+    }
+    Ok(())
+}
+
 pub fn inhibits_sleep() -> bool {
     let directory = Path::new(DIRECTORY);
     ready(directory)
@@ -174,16 +231,40 @@ fn checksum(text: &str) -> Result<[u8; 32]> {
 }
 
 pub async fn fetch(version: &str) -> Result<()> {
-    let lock = download_lock()?;
-    lock.try_lock().context("another download is running")?;
+    let _lock = lock_download()?;
     check_request(version)?;
     let directory = Path::new(DIRECTORY);
+    let temporary_wifi = Path::new(WIFI_OFF).try_exists()?;
+    let (temporary, digest) = if temporary_wifi {
+        fs::write(TEMPORARY_WIFI, b"")?;
+        let download = async {
+            connect_wifi().await?;
+            fetch_assets(version, directory).await
+        }
+        .await;
+        if let Err(error) = restore_wifi().await {
+            if let Err(download_error) = &download {
+                eprintln!("OpenDisplay download failed: {download_error:#}");
+            }
+            return Err(error);
+        }
+        download?
+    } else {
+        fetch_assets(version, directory).await?
+    };
+    stage_verified(temporary, directory, version, digest).await
+}
+
+async fn fetch_assets(
+    version: &str,
+    directory: &Path,
+) -> Result<(tempfile::NamedTempFile, [u8; 32])> {
     let sums = tempfile::NamedTempFile::new_in(directory)?;
     download(version, "SHA256SUMS", sums.path(), 4096).await?;
     let digest = checksum(&fs::read_to_string(sums.path())?)?;
     let temporary = tempfile::NamedTempFile::new_in(directory)?;
     download(version, ASSET, temporary.path(), MAX_SIZE).await?;
-    stage_verified(temporary, directory, version, digest).await
+    Ok((temporary, digest))
 }
 
 async fn stage_verified(
