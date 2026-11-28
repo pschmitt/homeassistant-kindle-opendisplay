@@ -15,6 +15,7 @@ pub struct Settings {
     pub stay_awake_on_external_power: bool,
     pub cpu_latency_us: i32,
     pub commands: Commands,
+    pub updates: Updates,
     pub sleep_after_seconds: u32,
     pub sleep_for_seconds: u32,
     pub full_refresh_every: u32,
@@ -25,6 +26,22 @@ pub struct Settings {
 pub struct Commands {
     pub enabled: bool,
     pub user: String,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Updates {
+    pub require_external_power: bool,
+    pub minimum_battery_percent: u8,
+}
+
+impl Default for Updates {
+    fn default() -> Self {
+        Self {
+            require_external_power: true,
+            minimum_battery_percent: 30,
+        }
+    }
 }
 
 impl Default for Commands {
@@ -47,6 +64,7 @@ impl Default for Settings {
             stay_awake_on_external_power: true,
             cpu_latency_us: 0,
             commands: Commands::default(),
+            updates: Updates::default(),
             sleep_after_seconds: 0,
             sleep_for_seconds: 300,
             full_refresh_every: 10,
@@ -92,6 +110,10 @@ impl Settings {
             settings.full_refresh_every <= 1000,
             "full_refresh_every must be between 0 and 1000"
         );
+        ensure!(
+            (1..=100).contains(&settings.updates.minimum_battery_percent),
+            "updates.minimum_battery_percent must be between 1 and 100"
+        );
         ensure!(!settings.commands.user.is_empty(), "commands.user is empty");
         if settings.commands.enabled {
             settings.commands.account()?;
@@ -127,5 +149,33 @@ impl Commands {
             }
         }
         anyhow::bail!("commands.user is not a local account")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn update_settings_default_and_validate() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        let config = directory.path().join("config.toml");
+        let defaults = Settings::load(directory.path())?.updates;
+        assert!(defaults.require_external_power);
+        assert_eq!(defaults.minimum_battery_percent, 30);
+
+        fs::write(&config, "[updates]\nrequire_external_power = false\n")?;
+        let updates = Settings::load(directory.path())?.updates;
+        assert!(!updates.require_external_power);
+        assert_eq!(updates.minimum_battery_percent, 30);
+
+        for invalid in [0, 101] {
+            fs::write(
+                &config,
+                format!("[updates]\nminimum_battery_percent = {invalid}\n"),
+            )?;
+            assert!(Settings::load(directory.path()).is_err());
+        }
+        Ok(())
     }
 }

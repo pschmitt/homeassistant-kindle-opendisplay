@@ -123,9 +123,14 @@ The Kindle Inkwell device info shows both Kindle OS and the OpenDisplay
 receiver version. The matching native OpenDisplay device shows the
 receiver version with the Kindle's manufacturer and hardware model.
 
-Connect the Kindle to external power before pressing **Install**. The
-running receiver downloads the ARMv7 binary over HTTPS and verifies the
-release checksum. Starting with v0.9.7, the running receiver temporarily
+By default, connect the Kindle to external power before pressing
+**Install**. Starting with v0.9.8, you can set
+`updates.require_external_power = false` to update unplugged when the
+battery meets `updates.minimum_battery_percent` (30% by default). See
+[device configuration](device-config.md).
+
+The running receiver downloads the ARMv7 binary over HTTPS and verifies
+the release checksum. Starting with v0.9.7, the receiver temporarily
 connects to a saved Wi-Fi network if Wi-Fi is off. It disconnects again
 after the download, including on failure. To update from v0.9.6 or older,
 turn Wi-Fi on before installing and restore your preferred setting afterward.

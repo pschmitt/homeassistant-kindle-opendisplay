@@ -2,7 +2,9 @@
 
 The receiver reads `/opt/opendisplay/config.toml` on the Kindle.
 Omitted keys use the defaults below. Values at the top level go before
-`[commands]`. Reload from Inkwell after saving.
+`[commands]` and `[updates]`. Reload from Inkwell after saving. The receiver
+reads the update settings on each update attempt, so changing only those
+settings takes effect without a reload.
 
 ```sh
 kill -HUP "$(cat /run/opendisplay.pid)"
@@ -23,6 +25,10 @@ full_refresh_every = 10
 [commands]
 enabled = false
 user = "nobody"
+
+[updates]
+require_external_power = true
+minimum_battery_percent = 30
 ```
 
 | Key | Default | Accepted values and effect |
@@ -39,6 +45,8 @@ user = "nobody"
 | `full_refresh_every` | `10` | Integer, 0–1,000. Frames normally use a REAGL partial update, which redraws only changed pixels without the black-and-white flash. The first frame after launch and every Nth frame after it use a flashing GC16 full refresh to clear ghosting. `1` flashes every frame, as before; `0` flashes only the first. |
 | `commands.enabled` | `false` | Boolean. Allow authenticated, encrypted command execution with `commands.user`. |
 | `commands.user` | `"nobody"` | Nonempty local username. When execution is enabled, both the account and its primary group must be non-root. |
+| `updates.require_external_power` | `true` | Boolean. Set to `false` to allow receiver updates on battery. |
+| `updates.minimum_battery_percent` | `30` | Integer, 1–100. When updating without external power, the battery gauge must report at least this percentage. |
 
 **Prevent sleep** in Home Assistant can defer suspend even on battery.
 Active BLE connections also defer timed suspend. The launcher keeps the

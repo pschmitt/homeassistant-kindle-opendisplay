@@ -13,6 +13,7 @@ use tokio::process::Command;
 use crate::{
     actions::{WIFI_OFF, set_wifi_connection, wifi_associated},
     advertising,
+    settings::{Settings, Updates},
     setup::DIRECTORY,
     sleep::{has_ipv4, renew_wifi_dhcp},
 };
@@ -101,13 +102,38 @@ pub fn check_request(version: &str) -> Result<()> {
         !pending(directory) && !ready(directory),
         "update already pending"
     );
-    ensure!(
-        advertising::external_power() == Some(true),
-        "connect the Kindle to external power before updating"
-    );
+    check_power(directory)?;
     ensure!(
         Path::new("/run/opendisplay-mode.lock").is_dir(),
         "start the receiver through its launcher"
+    );
+    Ok(())
+}
+
+fn check_power(directory: &Path) -> Result<()> {
+    let settings = Settings::load(directory)?.updates;
+    let external_power = advertising::external_power() == Some(true);
+    let battery_percent = || advertising::battery().map(|battery| battery.capacity);
+    check_power_policy(&settings, external_power, battery_percent)
+}
+
+fn check_power_policy(
+    settings: &Updates,
+    external_power: bool,
+    battery_percent: impl FnOnce() -> Option<u8>,
+) -> Result<()> {
+    if external_power {
+        return Ok(());
+    }
+    ensure!(
+        !settings.require_external_power,
+        "connect the Kindle to external power before updating"
+    );
+    let battery = battery_percent().context("cannot read the Kindle battery level")?;
+    let minimum = settings.minimum_battery_percent;
+    ensure!(
+        battery >= minimum,
+        "Kindle battery is at {battery}%; at least {minimum}% is required to update unplugged"
     );
     Ok(())
 }
@@ -252,6 +278,7 @@ pub async fn fetch(version: &str) -> Result<()> {
     } else {
         fetch_assets(version, directory).await?
     };
+    check_power(directory)?;
     stage_verified(temporary, directory, version, digest).await
 }
 
@@ -307,6 +334,22 @@ async fn stage_verified(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn update_power_policy_preserves_the_default_and_checks_unplugged_battery() {
+        let default = Updates::default();
+        assert!(check_power_policy(&default, false, || Some(100)).is_err());
+        assert!(check_power_policy(&default, true, || None).is_ok());
+
+        let unplugged = Updates {
+            require_external_power: false,
+            minimum_battery_percent: 30,
+        };
+        assert!(check_power_policy(&unplugged, true, || Some(10)).is_ok());
+        assert!(check_power_policy(&unplugged, false, || None).is_err());
+        assert!(check_power_policy(&unplugged, false, || Some(29)).is_err());
+        assert!(check_power_policy(&unplugged, false, || Some(30)).is_ok());
+    }
 
     #[test]
     fn release_versions_are_canonical_and_cannot_form_paths() {
